@@ -7,7 +7,7 @@ import math
 from typing import Any, cast
 
 from .exceptions import KritsSchemaError
-from .models import Road, RoadEvent, RoadType, TrafficLink, TrafficSection
+from .models import Cctv, Detour, DetourRoad, Road, RoadEvent, RoadType, TrafficLink, TrafficSection, TravelTime
 
 
 def decode_json(text: str) -> object:
@@ -151,4 +151,88 @@ def parse_events(value: object, road_type: RoadType | None = None) -> tuple[Road
                 _optional_text(info.get("occrrncLinkId"), "occrrncLinkId"),
                 _optional_text(info.get("mssageCn"), "mssageCn"), dict(info),
             ))
+    return tuple(result)
+
+
+def _list(value: object, name: str) -> list[Any]:
+    if not isinstance(value, list):
+        raise KritsSchemaError(f"{name}: 배열이 필요합니다")
+    return value
+
+
+def _data(value: object) -> dict[str, Any]:
+    payload = _object(value, "응답")
+    if _object(payload.get("header"), "header").get("state") != "OK":
+        raise KritsSchemaError("정상 응답 header가 없습니다")
+    return _object(_object(payload.get("body"), "body").get("data"), "data")
+
+
+def parse_cctvs(value: object) -> tuple[Cctv, ...]:
+    """CCTV 검색은 envelope 없는 배열이다. 빈 배열과 형식 오류를 구분한다."""
+    result = []
+    for row in _list(value, "CCTV"):
+        item = _object(row, "CCTV 항목")
+        result.append(Cctv(_text(item.get("cctvId"), "cctvId"), _text(item.get("instlLcDc"), "instlLcDc"),
+                           _optional_text(item.get("routeNo"), "routeNo"),
+                           _optional_text(item.get("roadNo"), "roadNo"),
+                           _optional_text(item.get("linkId"), "linkId"), dict(item)))
+    return tuple(result)
+
+
+def parse_detour_roads(value: object) -> tuple[DetourRoad, ...]:
+    """공개 고속도로 우회 목록 DOM의 문자열 식별자를 검증한다."""
+    rows = _list(value, "우회 도로 DOM")
+    if not rows:
+        raise KritsSchemaError("우회 도로 DOM이 비어 있습니다")
+    result = []
+    seen = set()
+    for row in rows:
+        item = _object(row, "우회 도로")
+        number = _text(item.get("road_number"), "road_number")
+        if not number.isascii() or not number.isdigit() or number in seen:
+            raise KritsSchemaError("우회 노선번호 형식이 다르거나 중복됐습니다")
+        seen.add(number)
+        result.append(DetourRoad(number, _text(item.get("name"), "name")))
+    return tuple(result)
+
+
+def parse_detours(value: object, road_number: str) -> tuple[Detour, ...]:
+    """양방향 배열을 보존하고 노선·방향 계약을 교차 검증한다."""
+    sections = _object(_data(value).get("SECTIONS"), "SECTIONS")
+    result = []
+    for key, direction in (("DOWNROAD", "1"), ("UPROAD", "2")):
+        for row in _list(sections.get(key), key):
+            item = _object(row, "우회 구간")
+            if item.get("ROAD_NO") != road_number or item.get("SCTN_TY_CODE") != "EX" or item.get("DRC_CODE") != direction:
+                raise KritsSchemaError("우회 노선번호/도로종류/방향이 조회 조건과 다릅니다")
+            result.append(Detour(_text(item.get("MLN_SCTN_ID"), "MLN_SCTN_ID"),
+                                 _text(item.get("DETU_ID"), "DETU_ID"), road_number,
+                                 _text(item.get("SCTN_NM"), "SCTN_NM"), direction,
+                                 _number(item.get("MAIN_PASNG_SPED"), "MAIN_PASNG_SPED"),
+                                 _number(item.get("DETOUR_PASNG_SPED"), "DETOUR_PASNG_SPED"),
+                                 _number(item.get("MAIN_PASNG_TIME"), "MAIN_PASNG_TIME"),
+                                 _number(item.get("DETOUR_PASNG_TIME"), "DETOUR_PASNG_TIME"), dict(item)))
+    return tuple(result)
+
+
+def parse_origins(value: object) -> tuple[str, ...]:
+    """기점 선택 DOM을 검증한다. 누락 DOM을 정상 빈 목록으로 보지 않는다."""
+    rows = _list(value, "기점 DOM")
+    origins = tuple(_text(row, "기점") for row in rows)
+    if not origins or len(set(origins)) != len(origins):
+        raise KritsSchemaError("기점 DOM이 비어 있거나 중복됐습니다")
+    return origins
+
+
+def parse_travel_times(value: object, origin: str) -> tuple[TravelTime, ...]:
+    """기점 문자열로 조회한 COURSE 배열을 검증한다."""
+    result = []
+    for row in _list(_data(value).get("COURSE"), "COURSE"):
+        item = _object(row, "도시간 항목")
+        if item.get("BSPOTNM") != origin:
+            raise KritsSchemaError("도시간 응답 기점이 조회 조건과 다릅니다")
+        result.append(TravelTime(_text(item.get("GRPID"), "GRPID"),
+                                 _text(item.get("GRPCOURSNM"), "GRPCOURSNM"), origin,
+                                 _text(item.get("ESPOTNM"), "ESPOTNM"),
+                                 _number(item.get("REQRETIME"), "REQRETIME"), dict(item)))
     return tuple(result)
