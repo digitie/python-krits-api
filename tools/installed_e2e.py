@@ -2,12 +2,40 @@
 
 import argparse
 import asyncio
+from dataclasses import replace
 from datetime import date, timedelta
 import importlib.metadata
 import json
 from pathlib import Path
 import site
 import sys
+
+
+def is_within(path: Path, root: Path) -> bool:
+    """이미 resolve한 경로의 포함관계를 실제 디렉터리 동일성까지 확인한다."""
+    if path.is_relative_to(root):
+        return True
+    # Windows의 확장 접두사/드라이브 별칭도 실제 같은 root이면 내부 경로다.
+    return any(parent.exists() and parent.samefile(root) for parent in (path, *path.parents))
+
+
+async def reuse_file(client, store, attachment, *, max_bytes=1024**3):
+    """메타데이터가 같은 보관본을 Chromium operation 없이 재사용해야 통과한다."""
+    before = await store.current(attachment)
+    if before is None or before.attachment != replace(attachment, raw={}):
+        raise AssertionError("일치하는 보관본이 없습니다. 별도 수집 단계에서 첨부 변경을 확인해야 합니다")
+    operation = client._browser.operation
+
+    def unexpected_operation():
+        raise AssertionError("보관본 재사용 중 Chromium operation이 발생했습니다")
+
+    client._browser.operation = unexpected_operation
+    try:
+        result = await client.download_file(attachment, store, max_bytes=max_bytes)
+    finally:
+        client._browser.operation = operation
+    assert result == before
+    return result
 
 
 def arguments():
@@ -31,6 +59,7 @@ async def run(args):
     assert imported.is_relative_to(args.package_root), (imported, args.package_root)
     distribution = importlib.metadata.distribution("python-krits-api")
     assert Path(distribution.locate_file("krits")).resolve() == args.package_root / "krits"
+    assert (args.package_root / "krits" / "py.typed").is_file()
     store = FileStore(args.file_store)
     end = date.today()
     summary = {"package": str(imported), "version": distribution.version}
@@ -70,15 +99,12 @@ async def run(args):
             report = await inspect_file(store, small)
         assert table.rows and report.report_path
         assert await store.verify(small) == small
-        assert await client.download_file(attachment, store, max_bytes=10*1024**2) == small
+        assert await reuse_file(client, store, attachment, max_bytes=10*1024**2) == small
         summary["history"] = {"bytes": small.size_bytes, "sha256": small.sha256, "rows": len(table.rows)}
         if args.run_large_files:
             attachment = releases.items[0].data_file
             assert attachment is not None and attachment.name.lower().endswith("nodelinkdata.zip")
-            before = await store.current(attachment)
-            assert before is not None, "전체 ZIP은 pytest --run-large-files로 한 번 수집한 뒤 재사용합니다"
-            large = await client.download_file(attachment, store)
-            assert large == before
+            large = await reuse_file(client, store, attachment)
             report = await inspect_file(store, large, limits=FileLimits(
                 max_member_bytes=2*1024**3, max_total_bytes=6*1024**3))
             assert report.crc_checked and report.members and report.metadata
@@ -91,7 +117,7 @@ def main():
     args.package_root = args.package_root.resolve()
     args.file_store = args.file_store.resolve()
     repository = Path(__file__).resolve().parents[1]
-    if args.package_root.is_relative_to(repository) or args.file_store.is_relative_to(repository):
+    if is_within(args.package_root, repository) or is_within(args.file_store, repository):
         raise SystemExit("설치 경로와 원본 보관소는 Git 저장소 밖에 지정해야 합니다")
     if not (args.package_root / "krits" / "__init__.py").is_file():
         raise SystemExit("--package-root에 wheel을 먼저 pip --target 설치해야 합니다")

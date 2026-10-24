@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from krits import FileLimits, FileStore, KritsClient, inspect_file
+from tools.installed_e2e import is_within
 
 pytestmark = [pytest.mark.live, pytest.mark.large_file]
 
@@ -17,7 +18,7 @@ async def test_complete_nodelink_zip_download_crc_metadata_and_reuse(request, mo
         pytest.fail("--file-store에 저장소 밖의 재사용 가능한 경로를 지정해야 합니다")
     storage_root = Path(root).resolve()
     repository = Path(__file__).resolve().parents[1]
-    if storage_root.is_relative_to(repository):
+    if is_within(storage_root, repository):
         pytest.fail("전체 원본은 Git 저장소 밖에 보관해야 합니다")
     store = FileStore(storage_root)
     today = date.today()

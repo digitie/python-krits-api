@@ -41,6 +41,9 @@ python -I tools\installed_e2e.py --package-root C:\Temp\krits-wheel-SHA --file-s
 검증한 인코딩으로 명시 지정한다. 이후 파일이 바뀌면 근거를 다시 확인해 인자를 바꿔야 한다.
 전체 ZIP은 선행 pytest로 수집된 current 버전만 재사용해 추가 대용량 전송을 하지 않는다.
 설치본에서도 CRC·메타데이터와 같은 원본 SHA를 확인한다.
+작은 내역서/전체 ZIP 재사용에서는 첨부 메타데이터가 같아야 하며 Chromium operation을
+발생시키면 즉시 실패한다. 반환 파일의 동등성만으로 전송0회를 판정하지 않는다.
+보관소/설치 경로의 저장소 내부 검사는 Windows 확장 경로도 실제 디렉터리 동일성으로 확인한다.
 
 외부 S3 계정은 제공되지 않았으므로 전체 live의 S3 검증은 localhost 독립 서명 HTTP 계약이다.
 실제 AWS/MinIO 운영 계정·버킷·자격증명·PyPI 게시·운영 배포는 이 게이트의 범위가 아니다.
