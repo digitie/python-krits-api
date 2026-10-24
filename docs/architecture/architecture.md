@@ -1,0 +1,60 @@
+# 구조와 책임 경계
+
+## 데이터 흐름
+
+```text
+ITS 공개 웹 화면 ─ Chromium async ─ DOM/응답 ─ 순수 parser ─ typed snapshot ─ 소비자
+ITS 공개 자료실 ─ Chromium 발견 ─ 첨부 다운로드 ─ 형식/크기/SHA-256 검증 ─ 원본+manifest
+```
+
+화면이 사용하는 공개 웹 요청은 browser context 안에서만 수행한다. 인증 Open API와
+별도 계약이며 serviceKey/apiKey 설정을 만들지 않는다. 일반 HTTP 직접 호출로 대체하지 않는다.
+외부 앱이 자체 DB·수집 스케줄·장기 통계·제공 API를 담당한다.
+
+## 모듈과 공개 계약 (구현 예정)
+
+| 모듈 | 책임 | 의존 방향 |
+|---|---|---|
+| `client.py` | `KritsClient`, 공개 조회 메서드·입력 검증 | browser, parse, models |
+| `_browser.py` | Playwright async Chromium, 소유권·직렬 operation·종료 | ratelimit, exceptions |
+| `_ratelimit.py` | 한 루프의 공유 `AsyncTokenBucket` | asyncio/time |
+| `models.py` | frozen dataclass, 출처·수집 시각·범위·원시 필드 | 표준 라이브러리 |
+| `parse.py` | JSON/DOM 레코드의 엄격 검증·타입 변환 | models, exceptions |
+| `files.py` | 파일 목록·기간 검색·첨부 발견·다운로드 | browser, models, storage |
+| `storage.py` | 청크·해시·임시파일·원자적 manifest·재검증 | 표준 라이브러리 |
+| `exceptions.py` | 접근·제한·네트워크·스키마·무결성 오류 | 표준 라이브러리 |
+
+클라이언트는 첫 operation에서 자원을 만들고 `async with`/`aclose()`로 닫는다.
+외부 context 주입 시 소유권을 명시하고 호출자의 자원을 닫지 않는다. 종료 후 재사용은 거부한다.
+같은 page에 동시에 navigation하지 않도록 operation 단위 lock을 사용한다.
+timeout, 취소, 초기화 중 실패에도 소유 자원을 회수한다.
+
+기본 수집 operation은 1 RPS, burst capacity=1, 자동 재시도 0이다. 공유 버킷을 주입할 수 있다.
+이 제한은 명시적 수집 operation의 예산이며 브라우저가 로드하는 모든 자산의 초당 전송 수를
+보장하지 않는다. 타일·영상·분석 자산을 불필요하게 전송하지 않도록 단계별로 차단한다.
+서비스의 실제 호출 제한을 무시하거나 보장하는 설정이 아니다.
+
+## 모델
+
+조회 결과에는 `source_url`, UTC `collected_at`, 조회 조건, 완전성 설명을 포함한다.
+식별자는 `str`, 검증된 수치는 `float`/`int`, 빈 선택 값은 `None`으로 둔다.
+공식 Open API 원문 필드와 웹 화면 원문 필드를 하나의 의미로 추정 매핑하지 않는다.
+원문 레코드 보존 시 세션·키는 제외한다. 파싱 실패를 행 제외로 숨기지 않는다.
+
+자료실 모델은 자료 ID·첨부 ID·파일명·기준일·설명·발견 URL을 보존한다.
+동일 날짜에 파일이 교체될 수 있으므로 ID+첨부+SHA-256으로 버전을 식별한다.
+manifest의 상태는 발견/다운로드/검증 완료를 구분한다. 최신 선택은 명시적 메타데이터에
+기반하며 날짜 파싱 실패를 수집일로 대신하지 않는다.
+
+## 참조 프로젝트의 적용 범위
+
+2026-10-24 로컬 참조 HEAD를 읽었다. 참조 checkout의 미커밋 변경은 복사하지 않는다.
+
+| 저장소/commit | 채택 | 제외 |
+|---|---|---|
+| [python-kric-api](https://github.com/digitie/python-kric-api) `55361313ad59f13e8699ebcbe130c532002b9b76` | src 레이아웃, py.typed, 문서 라우팅, 작업 기록, 2인 리뷰 | 철도·해운 API/키와 도메인 모델 |
+| [python-opinet-api](https://github.com/digitie/python-opinet-api) `dcfb41a1862bb9718a778fdc0fc2e3e807ed7d47` | native async, 공유 FIFO 버킷, lazy 세션, 소유권 | certkey HTTP transport, 유가/좌표 로직 |
+| [python-mois-api](https://github.com/digitie/python-mois-api) `3cdee09eb753edbdaf91c28a955e2c6ddd72ec17` | 청크 다운로드, thread 파일 I/O와 취소 안전, SHA-256 | 인허가 카탈로그, 지오코더, 서비스 DB |
+
+KRIC·Opinet의 GPL-3.0-or-later, MOIS의 MIT 출처를 보존한다. 실제 코드 복사 시
+`NOTICE`에 파일별 출처를 추가한다. 객체 저장소 연동은 T008에서 명시적 설정으로 제공한다.
