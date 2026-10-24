@@ -95,11 +95,12 @@ async def download_file(browser: BrowserSession, attachment: FileAttachment, sto
                         *, max_bytes: int, refresh: bool) -> StoredFile:
     """재검증한 보관본을 재사용하거나 명시적으로 새 전송을 수행한다."""
     validate_attachment(attachment, max_bytes)
-    versions = await store.versions(attachment)
-    if not refresh and versions and _metadata(versions[-1].attachment) == _metadata(attachment):
-        if versions[-1].size_bytes > max_bytes:
+    await store.versions(attachment)
+    current = await store.current(attachment)
+    if not refresh and current is not None and _metadata(current.attachment) == _metadata(attachment):
+        if current.size_bytes > max_bytes:
             raise KritsIntegrityError("보관본 크기가 명시한 상한을 넘습니다")
-        return versions[-1]
+        return current
     temporary: list[Path] = []
     try:
         await run_file_io(lambda: temporary.append(store._temporary()))

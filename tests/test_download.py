@@ -168,3 +168,16 @@ async def test_utf16_html_error_is_rejected(browser,tmp_path,attachment,data):
     await simulate(browser,attachment,chunks=(data,))
     async with KritsClient() as c:
         with pytest.raises(KritsIntegrityError):await c.download_file(attachment,FileStore(tmp_path))
+
+
+async def test_refresh_revert_then_default_reuses_last_successful_observation(browser,tmp_path,attachment):
+    store=FileStore(tmp_path)
+    async with KritsClient() as c:
+        await simulate(browser,attachment,chunks=(b'A',));a=await c.download_file(attachment,store)
+        await simulate(browser,attachment,chunks=(b'B',));b=await c.download_file(attachment,store,refresh=True)
+        assert a.sha256!=b.sha256
+        await simulate(browser,attachment,chunks=(b'A',));assert await c.download_file(attachment,store,refresh=True)==a
+        browser.page.goto.reset_mock()
+        assert await c.download_file(attachment,store)==a
+        browser.page.goto.assert_not_awaited()
+        assert len(await store.versions(attachment))==2

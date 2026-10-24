@@ -133,6 +133,44 @@ class FileStore:
         except OSError as exc:
             raise KritsIntegrityError("보관 버전 목록을 읽을 수 없습니다") from exc
 
+    def _current(self, attachment: FileAttachment) -> StoredFile | None:
+        identity = _identity(attachment)
+        pointer = self._path("current", identity + ".json")
+        if not pointer.exists():
+            return None
+        try:
+            if pointer.stat().st_size > 64 * 1024:
+                raise ValueError
+            with pointer.open(encoding="utf-8") as source:
+                data = json.load(source)
+            if (not isinstance(data, dict) or data.get("schema_version") != 1
+                    or data.get("identity") != identity or not isinstance(data.get("sha256"), str)
+                    or _HASH.fullmatch(data["sha256"]) is None
+                    or datetime.fromisoformat(data["observed_at"]).tzinfo is None):
+                raise ValueError
+            return self._read(self._path("manifests", identity, data["sha256"] + ".json"), identity)
+        except (OSError, ValueError, KeyError, TypeError, RecursionError) as exc:
+            raise KritsIntegrityError("마지막 성공 관찰 포인터를 검증할 수 없습니다") from exc
+
+    async def current(self, attachment: FileAttachment) -> StoredFile | None:
+        """마지막 성공 전송을 공개한 버전을 재검증한다. 없으면 추정 선택하지 않는다."""
+        return await run_file_io(self._current, attachment)
+
+    def _select(self, identity: str, sha256: str) -> None:
+        self._path("current", mkdir=True)
+        pointer = self._path("current", identity + ".json")
+        staging = self._path("staging", mkdir=True)
+        descriptor, name = tempfile.mkstemp(prefix="current-", suffix=".part", dir=staging)
+        temporary = Path(name)
+        try:
+            with os.fdopen(descriptor, "w", encoding="utf-8") as output:
+                json.dump({"schema_version": 1, "identity": identity, "sha256": sha256,
+                           "observed_at": datetime.now(timezone.utc).isoformat()}, output)
+                output.flush(); os.fsync(output.fileno())
+            os.replace(temporary, pointer)
+        finally:
+            temporary.unlink(missing_ok=True)
+
     def _temporary(self) -> Path:
         directory = self._path("staging", mkdir=True)
         descriptor, name = tempfile.mkstemp(prefix="download-", suffix=".part", dir=directory)
@@ -156,12 +194,14 @@ class FileStore:
         directory = self._path("manifests", identity, mkdir=True)
         manifest = directory / (sha256 + ".json")
         if manifest.exists():
-            return self._read(manifest, identity)
+            stored = self._read(manifest, identity)
+            self._select(identity, sha256)
+            return stored
         record = {"schema_version": 1, "status": "verified", "sha256": sha256,
                   "size_bytes": size, "collected_at": datetime.now(timezone.utc).isoformat(),
                   "content_type": content_type, "format_validation": "not_checked",
                   "attachment": _metadata(attachment)}
-        descriptor, name = tempfile.mkstemp(prefix="manifest-", suffix=".part", dir=directory)
+        descriptor, name = tempfile.mkstemp(prefix="manifest-", suffix=".part", dir=self._path("staging"))
         temporary_manifest = Path(name)
         try:
             with os.fdopen(descriptor, "w", encoding="utf-8") as output:
@@ -172,4 +212,6 @@ class FileStore:
                 pass  # 다른 저장소 인스턴스가 먼저 공개했으면 그 manifest를 재검증한다.
         finally:
             temporary_manifest.unlink(missing_ok=True)
-        return self._read(manifest, identity)
+        stored = self._read(manifest, identity)
+        self._select(identity, sha256)
+        return stored

@@ -1,7 +1,8 @@
 # 공개 첨부 다운로드·원본 버전 관리
 
 T007의 공개 API는 `await client.download_file(attachment, store, max_bytes=..., refresh=False)`,
-`await store.versions(attachment)`, `await store.verify(stored)`다. `FileStore(root)`는 명시적인
+`await store.versions(attachment)`, `await store.current(attachment)`, `await store.verify(stored)`다.
+`FileStore(root)`는 명시적인
 로컬 보관 경로를 받는다. 다운로드 입력은 목록에서 발견한 `FileAttachment`다.
 
 ```python
@@ -54,6 +55,7 @@ root/
   staging/download-<무작위>.part
   objects/<SHA 앞2자리>/<SHA256>
   manifests/<첨부 identity SHA256>/<원본 SHA256>.json
+  current/<첨부 identity SHA256>.json
 ```
 
 identity는 서비스·자료 ID·첨부 ID·URL의 해시다. 원본 이름·날짜로 파일을 삭제하거나 덮지 않는다.
@@ -73,7 +75,14 @@ verified는 전송/로컬 크기·해시 검증을 뜻한다. 제공자 기준�
 반환한다. 64KiB 초과 manifest, 첨부별1만개 초과, 알 수 없는 경로·심볼릭 링크·손상은 명시적
 `KritsIntegrityError`다. 이전 버전이 누락·손상돼도 조용히 건너뛰지 않는다.
 
-기본 재실행은 메타데이터가 같은 최신 보관본을 재검증해 반환하므로 ITS 전송은0회다.
+manifest 임시파일과 current 포인터 임시파일도 staging에만 작성한다. 공개 디렉터리의 조회가
+정상 진행 중 임시파일을 손상으로 오판하지 않는다. 중단된 staging 잔여는 버전으로 취급하지 않는다.
+
+기본 재실행은 메타데이터가 같고 마지막 성공 전송으로 선택된 보관본을 재검증해 반환하므로
+ITS 전송은0회다. 불변 manifest의 `collected_at`은 내용의 최초 수집시각이고, current 포인터는
+별도 `observed_at`과 마지막 공개 SHA를 원자 replace로 기록한다. A→B→A 복원 시 버전은2개를
+유지하면서 current는A를 선택한다. 동시 publish에서는 마지막으로 포인터 공개를 완료한 성공
+관찰이 선택된다. 포인터가 없으면 과거 버전을 현재로 추정하지 않고 새 전송을 수행한다.
 `refresh=True`는 명시적 새 전송으로 같은 URL/메타데이터의 내용 교체 여부를 확인한다.
 해시가 같으면 최초 버전을 재사용하고, 바뀌면 새 hash manifest를 추가해 이전 정상본을 유지한다.
 보관본 재사용은 원격 파일이 바뀌지 않았다는 주장이 아니다. ETag/Range/조건부 재개는 현재

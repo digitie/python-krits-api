@@ -4,6 +4,7 @@ import asyncio
 from dataclasses import replace
 import hashlib
 import json
+import os
 from pathlib import Path
 import threading
 
@@ -115,3 +116,40 @@ async def test_file_io_cancelled_worker_error_is_retrieved():
     task=asyncio.create_task(run_file_io(operation));await asyncio.to_thread(started.wait)
     task.cancel();release.set()
     with pytest.raises(asyncio.CancelledError):await task
+
+
+async def test_reverted_content_selects_last_observed_hash_without_changing_first_manifest(tmp_path,attachment):
+    store=FileStore(tmp_path)
+    assert await store.current(attachment) is None
+    first=publish(store,attachment,b'A');second=publish(store,attachment,b'B')
+    assert await store.current(attachment)==second
+    reverted=publish(store,attachment,b'A')
+    assert reverted==first and await store.current(attachment)==first
+    assert len(await store.versions(attachment))==2
+
+
+async def test_manifest_publish_is_invisible_to_other_reader_until_complete(tmp_path,attachment,monkeypatch):
+    store=FileStore(tmp_path);first=publish(store,attachment,b'A')
+    started=threading.Event();release=threading.Event();link=os.link
+    def delayed(source,destination,*args,**kwargs):
+        if Path(destination).parent.parent.name=='manifests':started.set();release.wait(5)
+        return link(source,destination,*args,**kwargs)
+    monkeypatch.setattr('krits.storage.os.link',delayed)
+    job=asyncio.create_task(asyncio.to_thread(publish,store,attachment,b'B'))
+    try:
+        assert await asyncio.to_thread(started.wait,5)
+        observer=FileStore(tmp_path)
+        assert await observer.versions(attachment)==(first,)
+        assert await observer.current(attachment)==first
+        assert all(path.suffix=='.json' for path in first.manifest_path.parent.iterdir())
+    finally:release.set()
+    second=await job
+    assert len(await store.versions(attachment))==2 and await store.current(attachment)==second
+    (tmp_path/'staging'/'interrupted-manifest.part').write_bytes(b'partial')
+    assert len(await store.versions(attachment))==2
+
+
+async def test_invalid_current_pointer_is_not_silently_ignored(tmp_path,attachment):
+    store=FileStore(tmp_path);publish(store,attachment)
+    pointer=next((tmp_path/'current').iterdir());pointer.write_text('{}')
+    with pytest.raises(KritsIntegrityError):await store.current(attachment)
