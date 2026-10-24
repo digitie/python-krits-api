@@ -3,7 +3,9 @@
 현재 단계는 T009 남은 공개 기능 조사/구현이다. T001–T008은 머지 완료다.
 현재 VMS·DISASTER 구역, 12종 지원 판정을 추가했다. 계약은 `remaining-services.md`다.
 Windows 동시 디렉터리 생성 중 resolve의 확장 경로 접두사 표기 차이를 재현해 비교 정규화를 추가했다.
-독립 리뷰·전체 live·CI 통과 전에는 머지하지 않는다.
+최종 `f441c93` 두 독립 재리뷰·offline493/97.05%·mypy/build/CI6개job 통과.
+전체live63(c5cf9bf), 수정 후 영향 범위live9(f441c93) 통과. `validation/t009.md` 참조.
+증빙 commit CI 확인 후 PR #11을 머지하고 T010을 시작한다.
 T008은 bounded ZIP 사전/CRC 검사·prj/cpg 원문·선택 CSV/XLSX·불변 검사 보고서,
 명시적 S3 signed PUT/GET 해시 확인을 추가했다. 최종 `1424b77`에서 두 독립 재리뷰,
 오프라인471/96.94%·전체live58·별도wheel CSV읽기/보고서·소스CI6개job을 통과했다.
