@@ -7,5 +7,6 @@ PR #2는 `b11566e`로 머지했다. `origin/main`에서 T003 소통·돌발 조�
 도로 목록·방향별 구간/개별 링크·돌발의 공개 메서드와 엄격 파서를 추가했다.
 T003 PR #3 최종 소스 `bc143ea`에서 두 독립 리뷰, 오프라인 146개/99.15%, 실제 Chromium
 live 12개, 설치본 검증이 통과했다. `docs/validation/t003.md`를 확인한다.
-원격 CI와 PR 머지를 확인한 뒤 `origin/main`에서 T004 CCTV·우회·도시간 조회로 진행한다.
+T003 증빙 `d3fa583`의 원격 CI 6개 job이 모두 통과했다. PR #3 최종 문서 commit의 CI와
+머지를 확인한 뒤 `origin/main`에서 T004 CCTV·우회·도시간 조회로 진행한다.
 API 키는 없으며 발급받는 작업을 제안하지 않는다. 구현 transport는 Chromium async다.
