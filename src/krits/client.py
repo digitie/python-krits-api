@@ -2,20 +2,24 @@
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
-from datetime import datetime, timezone
+import asyncio
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
+from datetime import date, datetime, timezone
 import re
 from typing import Literal
 
-from playwright.async_api import BrowserContext, Error as PlaywrightError, Page, Request, Response
+from playwright.async_api import BrowserContext, Error as PlaywrightError, Locator, Page, Request, Response
 
 from ._browser import BASE_URL, BrowserSession
 from ._ratelimit import AsyncTokenBucket
 from .exceptions import (
     KritsAccessError, KritsNetworkError, KritsProviderError, KritsRateLimitError, KritsSchemaError,
 )
-from .models import DataSnapshot, PageSnapshot, Road, RoadEvent, RoadType, TrafficSection
-from .parse import decode_json, parse_events, parse_roads, parse_traffic
+from .models import Cctv, DataSnapshot, Detour, DetourRoad, FileAttachment, NodeLinkRelease, OpenDataService, PageSnapshot, Road, RoadEvent, RoadType, TrafficSection, TravelTime
+from .parse import (decode_json, parse_cctvs, parse_detour_roads, parse_detours, parse_events,
+                    nodelink_dom_ids, open_data_ids, parse_nodelink_releases, parse_open_data, parse_origins, parse_roads, parse_traffic,
+                    parse_travel_times, parse_weak_files)
 
 PublicPage = Literal["opendata", "traffic", "outbreak", "cctv", "detour", "travel_time", "nodelink"]
 _PATHS: dict[str, str] = {
@@ -64,6 +68,11 @@ def _road_type(value: RoadType) -> None:
 
 async def _open_page(browser_page: Page, page: PublicPage) -> str:
     url = BASE_URL + _PATHS[page]
+    return await _visit_page(browser_page, url, _CONTAINERS.get(page, "#map"))
+
+
+async def _visit_page(browser_page: Page, url: str, container: str) -> str:
+    """내부에서 선택한 고정 공개 경로의 응답·제목·접근 상태를 검증한다."""
     response = await browser_page.goto(url, wait_until="domcontentloaded")
     if response is None:
         raise KritsNetworkError("공개 페이지 응답이 없습니다")
@@ -75,7 +84,7 @@ async def _open_page(browser_page: Page, page: PublicPage) -> str:
         raise KritsAccessError("로그인 또는 보안 확인 화면입니다")
     if "ITS" not in title or "국가교통정보센터" not in title:
         raise KritsSchemaError("ITS 공개 페이지 제목 계약이 바뀌었습니다")
-    if not await browser_page.locator(_CONTAINERS.get(page, "#map")).count():
+    if not await browser_page.locator(container).count():
         raise KritsSchemaError("ITS 공개 페이지의 필수 컨테이너가 없습니다")
     return title
 
@@ -83,6 +92,7 @@ async def _open_page(browser_page: Page, page: PublicPage) -> str:
 async def _action_json(
     page: Page, endpoint: str, action: Callable[[], Awaitable[object]],
     expected: dict[str, object],
+    *, flat_request: bool = False,
 ) -> object:
     """이번 동작에서 시작한 요청만 관찰하며 listener를 성공·실패·취소 모두에서 제거한다."""
     requests: set[Request] = set()
@@ -99,9 +109,14 @@ async def _action_json(
             return
         try:
             encoded = request.post_data_json
-            if not isinstance(encoded, dict) or not isinstance(encoded.get("body"), dict):
+            if not isinstance(encoded, dict):
                 return
-            data = encoded["body"].get("data")
+            if flat_request:
+                data = encoded
+            elif isinstance(encoded.get("body"), dict):
+                data = encoded["body"].get("data")
+            else:
+                return
             if isinstance(data, dict) and all(data.get(key) == value for key, value in expected.items()):
                 requests.add(request)
         except (ValueError, KeyError, TypeError, PlaywrightError):
@@ -117,22 +132,106 @@ async def _action_json(
         response = await pending.value
         if denied_status is not None:
             _check_status(denied_status)
-        _check_status(response.status)
-        if response.url != url:
-            raise KritsAccessError("공개 웹 응답이 다른 경로로 이동했습니다")
-        text = await response.text()
-        if text.lstrip().startswith("<") and re.search(r"로그인|captcha|password|접근\s*(?:제한|거부)", text, re.I):
-            raise KritsAccessError("공개 웹 응답이 로그인 또는 보안 확인 화면입니다")
-        payload = decode_json(text)
+        payload = await _response_json(response, url)
         if denied_status is not None:
             _check_status(denied_status)
-        if isinstance(payload, dict) and isinstance(payload.get("header"), dict):
-            if payload["header"].get("state") != "OK":
-                raise KritsProviderError("공개 웹 제공자가 처리 실패를 반환했습니다")
         return payload
     finally:
         page.remove_listener("request", track)
         page.remove_listener("response", observe_denial)
+
+
+async def _response_json(response: Response, url: str) -> object:
+    """관찰한 공개 JSON 응답의 HTTP·로그인·제공자 상태를 검증한다."""
+    _check_status(response.status)
+    if response.url != url:
+        raise KritsAccessError("공개 웹 응답이 다른 경로로 이동했습니다")
+    text = await response.text()
+    if text.lstrip().startswith("<") and re.search(r"로그인|captcha|password|접근\s*(?:제한|거부)", text, re.I):
+        raise KritsAccessError("공개 웹 응답이 로그인 또는 보안 확인 화면입니다")
+    payload = decode_json(text)
+    if isinstance(payload, dict) and isinstance(payload.get("header"), dict):
+        if payload["header"].get("state") != "OK":
+            raise KritsProviderError("공개 웹 제공자가 처리 실패를 반환했습니다")
+    return payload
+
+
+async def _open_file_catalog(
+    page: Page, url: str, endpoint: str, validate: Callable[[object], object] = open_data_ids,
+) -> None:
+    """초기 목록 요청은 선택적이다. 발생한 응답은 조회 버튼을 누르기 전에 검사한다."""
+    responses: list[Response] = []
+
+    def observe(response: Response) -> None:
+        if response.url == BASE_URL + endpoint:
+            responses.append(response)
+
+    page.on("response", observe)
+    try:
+        await _visit_page(page, url, "#moveData")
+        await page.wait_for_load_state("networkidle")
+        for response in responses:
+            validate(await _response_json(response, BASE_URL + endpoint))
+    finally:
+        page.remove_listener("response", observe)
+
+
+@asynccontextmanager
+async def _denial_guard(page: Page, endpoint: str) -> AsyncIterator[Callable[[], None]]:
+    """초기 자동 조회부터 선택 결과까지 같은 endpoint의 거부를 유지한다."""
+    denied: int | None = None
+
+    def observe(response: Response) -> None:
+        nonlocal denied
+        if response.url == BASE_URL + endpoint and response.status in (401, 403, 429):
+            denied = denied or response.status
+
+    def check() -> None:
+        if denied is not None:
+            _check_status(denied)
+
+    page.on("response", observe)
+    try:
+        yield check
+        check()
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        check()
+        raise
+    finally:
+        page.remove_listener("response", observe)
+
+
+@asynccontextmanager
+async def _travel_widget(page: Page) -> AsyncIterator[tuple[Locator, tuple[str, ...], Callable[[], None]]]:
+    """초기 자동 조회를 확인한 뒤 기점 목록과 선택 동작을 노출한다."""
+    endpoint = "/map/getCityReqTimeByGroup"
+    await page.goto("about:blank")
+    async with _denial_guard(page, endpoint) as check:
+        await _action_json(page, endpoint, lambda: _open_page(page, "traffic"), {})
+        check()
+        select = page.locator(".region_list .select select")
+        await select.wait_for(state="attached")
+        origins = parse_origins(await select.locator("option").evaluate_all("es => es.map(e => e.value)"))
+        check()
+        yield select, origins, check
+
+
+def _date_range(start: date | None, end: date | None) -> tuple[str, str]:
+    """사이트의 종료일 기준 직전 1년 경계와 같은 달력 범위를 검증한다."""
+    if type(start) is not date or type(end) is not date:
+        raise ValueError("start_date/end_date는 datetime이 아닌 date여야 합니다")
+    try:
+        earliest = end.replace(year=end.year - 1)
+    except ValueError:
+        if end.year == 1:
+            earliest = date.min
+        else:
+            earliest = date(end.year - 1, 3, 1)
+    if start > end or start < earliest:
+        raise ValueError("시작일은 종료일 이하여야 하며 한 번에 1년 이내만 조회할 수 있습니다")
+    return start.isoformat(), end.isoformat()
 
 
 class KritsClient:
@@ -237,3 +336,149 @@ class KritsClient:
             )
             return DataSnapshot(parse_events(payload, road_type), BASE_URL + _PATHS["outbreak"],
                                 datetime.now(timezone.utc), {"road_type": road_type or "all", "excluded": "DISASTER"})
+
+    async def search_cctvs(self, keyword: str) -> DataSnapshot[Cctv]:
+        """CCTV명으로 메타데이터만 검색한다. 영상 재생/다운로드 요청은 하지 않는다."""
+        if not isinstance(keyword, str) or not keyword.strip() or len(keyword) > 100:
+            raise ValueError("keyword는 1~100자의 비어 있지 않은 문자열이어야 합니다")
+        keyword = keyword.strip()
+        async with self._browser.operation() as page:
+            await _open_page(page, "cctv")
+            await page.locator("#inp_search").fill(keyword)
+            payload = await _action_json(page, "/map/getCctvSearch", page.locator("#btn_search").click,
+                                         {"searchKeyword": keyword}, flat_request=True)
+            return DataSnapshot(parse_cctvs(payload), BASE_URL + _PATHS["cctv"],
+                                datetime.now(timezone.utc), {"keyword": keyword, "content": "metadata"})
+
+    async def list_detour_roads(self) -> DataSnapshot[DetourRoad]:
+        """현재 고속도로 우회 화면의 노선번호 목록을 반환한다."""
+        async with self._browser.operation() as page:
+            await _open_page(page, "detour")
+            rows = page.locator(".rt_box li.dep1")
+            await rows.first.wait_for(state="attached")
+            roads = parse_detour_roads(await rows.evaluate_all(_ROADS_SCRIPT))
+            return DataSnapshot(roads, BASE_URL + _PATHS["detour"], datetime.now(timezone.utc),
+                                {"road_type": "highway", "mode": "current"})
+
+    async def get_detours(self, road_number: str) -> DataSnapshot[Detour]:
+        """현재 고속도로의 양방향 본선·우회 비교를 조회한다. road_number는 노선번호다."""
+        if not isinstance(road_number, str) or re.fullmatch(r"[0-9]{1,4}", road_number) is None:
+            raise ValueError("road_number는 list_detour_roads의 노선번호 문자열이어야 합니다")
+        async with self._browser.operation() as page:
+            await _open_page(page, "detour")
+            rows = page.locator(".rt_box li.dep1")
+            await rows.first.wait_for(state="attached")
+            roads = parse_detour_roads(await rows.evaluate_all(_ROADS_SCRIPT))
+            index = next((i for i, road in enumerate(roads) if road.road_number == road_number), None)
+            if index is None:
+                raise ValueError("공개 우회 목록에 없는 노선번호입니다")
+            payload = await _action_json(page, "/map/getMainToDetourSectionsByRoad",
+                                         rows.nth(index).locator("a.title").click,
+                                         {"searchType": "rt", "roadNo": int(road_number), "sctnTyCode": "EX", "keyword": ""})
+            return DataSnapshot(parse_detours(payload, road_number), BASE_URL + _PATHS["detour"],
+                                datetime.now(timezone.utc), {"road_type": "highway", "road_number": road_number, "mode": "current"})
+
+    async def list_travel_origins(self) -> DataSnapshot[str]:
+        """소통 지도 기점 선택 위젯의 지원 도시를 반환한다."""
+        async with self._browser.operation() as page:
+            async with _travel_widget(page) as (_select, origins, _check):
+                return DataSnapshot(origins, BASE_URL + _PATHS["traffic"], datetime.now(timezone.utc), {"widget": "region_list"})
+
+    async def get_travel_times(self, origin: str) -> DataSnapshot[TravelTime]:
+        """소통 지도 기점 위젯을 선택해 도시간 소요시간을 분 단위로 조회한다."""
+        if not isinstance(origin, str) or not origin.strip() or len(origin) > 100:
+            raise ValueError("origin은 list_travel_origins의 도시 문자열이어야 합니다")
+        async with self._browser.operation() as page:
+            async with _travel_widget(page) as (select, origins, check):
+                if origin not in origins:
+                    raise ValueError("공개 기점 목록에 없는 도시입니다")
+
+                async def choose() -> object:
+                    check()
+                    # 커스텀 셀렉트가 숨긴 원래 select의 값·change 이벤트다.
+                    return await select.select_option(origin, force=True)
+
+                payload = await _action_json(page, "/map/getCityReqTimeByGroup", choose, {"grpIds": origin})
+                return DataSnapshot(parse_travel_times(payload, origin), BASE_URL + _PATHS["traffic"],
+                                    datetime.now(timezone.utc), {"origin": origin, "widget": "region_list"})
+
+    async def list_data_files(
+        self, service: OpenDataService, *, start_date: date | None = None, end_date: date | None = None,
+    ) -> DataSnapshot[FileAttachment]:
+        """일반 OpenData 파일을 발견한다. 기간 ZIP과 정적 취약구간 CSV를 구분한다.
+
+        traffic/event/vms는 date 범위를 명시하고 weakSection은 날짜를 받지 않는다.
+        목록과 DOM 첨부를 대조하며 파일을 내려받지는 않는다.
+        """
+        if service not in ("traffic", "event", "vms", "weakSection"):
+            raise ValueError("지원하는 OpenData 파일 종류가 아닙니다")
+        if service == "weakSection":
+            if start_date is not None or end_date is not None:
+                raise ValueError("정적 취약구간 파일에는 날짜 조회가 없습니다")
+            dates = None
+        else:
+            dates = _date_range(start_date, end_date)
+        url = BASE_URL + "/opendata/opendataList?service=" + service
+        async with self._browser.operation() as page:
+            await page.goto("about:blank")
+            if dates is None:
+                await _visit_page(page, url, "#moveData")
+                links = page.locator("a[href^='/file/opendata/weakSections/']")
+                await links.first.wait_for(state="attached")
+                rows = await links.evaluate_all("es => es.map(e => ({name:e.textContent.trim(),href:e.getAttribute('href')}))")
+                return DataSnapshot(parse_weak_files(rows), url, datetime.now(timezone.utc),
+                                    {"service": service, "kind": "static"})
+            endpoint = "/opendata/getTestDataFileList"
+            async with _denial_guard(page, endpoint) as check:
+                await _open_file_catalog(page, url, endpoint)
+                check()
+                start, end = dates
+                await page.locator("#inp_trafficDate").fill(start.replace("-", "."))
+                await page.locator("#inp_trafficDate_endDate").fill(end.replace("-", "."))
+
+                async def search() -> None:
+                    check()
+                    await page.locator("input[onclick='pages.getDataFile(this)']").click()
+
+                payload = await _action_json(page, endpoint, search,
+                                             {"workingDirectory": service, "searchType": -1, "startDate": start, "endDate": end})
+                ids = open_data_ids(payload)
+                await page.wait_for_function("""ids => {
+                    const links = [...document.querySelectorAll('#data_file_list_result a')];
+                    return links.length === ids.length && links.every((e,i) => e.id === ids[i]);
+                }""", arg=list(ids))
+                links = await page.locator("#data_file_list_result a").evaluate_all(
+                    "es => es.map(e => ({id:e.id,name:e.title,href:e.getAttribute('href')}))")
+                return DataSnapshot(parse_open_data(payload, service, links), url, datetime.now(timezone.utc),
+                                    {"service": service, "start_date": start, "end_date": end, "kind": "date_range"})
+
+    async def list_nodelink_releases(self, *, start_date: date, end_date: date) -> DataSnapshot[NodeLinkRelease]:
+        """1년 이내 자료실 배포와 원본 ZIP·내역서의 실제 첨부를 발견한다."""
+        start, end = _date_range(start_date, end_date)
+        url = BASE_URL + _PATHS["nodelink"]
+        endpoint = "/opendata/getNodeLinkDataFileList"
+        async with self._browser.operation() as page:
+            await page.goto("about:blank")
+            async with _denial_guard(page, endpoint) as check:
+                await _open_file_catalog(page, url, endpoint, nodelink_dom_ids)
+                check()
+                await page.locator("#inp_trafficDate").fill(start.replace("-", "."))
+                await page.locator("#inp_trafficDate_endDate").fill(end.replace("-", "."))
+
+                async def search() -> None:
+                    check()
+                    await page.locator("input[onclick='pages.getDataFile(this)'][data-code='-1']").click()
+
+                payload = await _action_json(page, endpoint, search,
+                                             {"workingDirectory": "/nodeLink", "searchType": -1, "startDate": start, "endDate": end})
+                ids = nodelink_dom_ids(payload)
+                await page.wait_for_function("""ids => {
+                    const links = [...document.querySelectorAll('#data_file_list_result a.down')];
+                    return links.length === ids.length && links.every((e,i) => e.id === ids[i]);
+                }""", arg=list(ids))
+                links = await page.locator("#data_file_list_result a.down").evaluate_all("""es => es.map(e => {
+                    const copy = e.cloneNode(true); copy.querySelectorAll('span').forEach(s => s.remove());
+                    return {id:e.id,sequence:e.title,name:copy.textContent.trim(),href:e.getAttribute('href')};
+                })""")
+                return DataSnapshot(parse_nodelink_releases(payload, links), url, datetime.now(timezone.utc),
+                                    {"service": "nodelink", "start_date": start, "end_date": end})

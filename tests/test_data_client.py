@@ -163,6 +163,13 @@ async def test_action_matches_new_request_and_removes_listener():
     assert page.handlers == []
 
 
+async def test_flat_action_matches_root_object_instead_of_nested_data():
+    page = ActionPage(text='[]')
+    page.request.post_data_json = {"roadId": "0010"}
+    assert await _action_json(page, "/map/getLinks", page.click, {"roadId": "0010"}, flat_request=True) == []
+    assert page.handlers == []
+
+
 @pytest.mark.parametrize("status,text,url,error", [
     (401, "", None, KritsAccessError), (403, "", None, KritsAccessError),
     (429, "", None, KritsRateLimitError), (503, "", None, KritsNetworkError),

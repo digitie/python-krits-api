@@ -11,10 +11,14 @@ from .exceptions import (
     KritsRateLimitError,
     KritsSchemaError,
 )
-from .models import DataSnapshot, PageSnapshot, Road, RoadEvent, RoadType, TrafficLink, TrafficSection
+from .models import CatalogChanges, Cctv, DataSnapshot, Detour, DetourRoad, FileAttachment, NodeLinkRelease, OpenDataService, PageSnapshot, Road, RoadEvent, RoadType, TrafficLink, TrafficSection, TravelTime
+from .parse import compare_nodelink_catalogs
 
 __all__ = [
     "AsyncTokenBucket", "KritsAccessError", "KritsClient", "KritsClosedError", "KritsError",
     "KritsNetworkError", "KritsRateLimitError", "KritsSchemaError", "PageSnapshot", "PublicPage",
     "DataSnapshot", "Road", "RoadEvent", "RoadType", "TrafficLink", "TrafficSection", "KritsProviderError",
+    "Cctv", "Detour", "DetourRoad", "TravelTime",
+    "FileAttachment", "OpenDataService",
+    "NodeLinkRelease", "CatalogChanges", "compare_nodelink_catalogs",
 ]

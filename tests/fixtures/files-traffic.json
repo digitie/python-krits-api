@@ -1,0 +1,51 @@
+{
+  "header": {
+    "result": "정상 처리되었습니다.",
+    "state": "OK"
+  },
+  "body": {
+    "dataLen": 1,
+    "data": {
+      "fileVOList": [
+        {
+          "fileId": "traffic_-2001758244",
+          "fileSeq": 0,
+          "fileStreCoursNm": null,
+          "fileStreNm": "20261023_5Min.zip",
+          "fileOrgStreNm": null,
+          "fileExtsnNm": null,
+          "fileContent": null,
+          "fileMg": 0,
+          "fileSize": 751694293,
+          "workingDirectory": "2026",
+          "dwldDt": null,
+          "openDataId": null,
+          "conectMberTy": 0,
+          "mberId": null,
+          "fileDate": 0,
+          "fileStrDate": "1792775698840",
+          "dataType": "traffic"
+        },
+        {
+          "fileId": "traffic_-1805581121",
+          "fileSeq": 0,
+          "fileStreCoursNm": null,
+          "fileStreNm": "20261022_5Min.zip",
+          "fileOrgStreNm": null,
+          "fileExtsnNm": null,
+          "fileContent": null,
+          "fileMg": 0,
+          "fileSize": 751686474,
+          "workingDirectory": "2026",
+          "dwldDt": null,
+          "openDataId": null,
+          "conectMberTy": 0,
+          "mberId": null,
+          "fileDate": 0,
+          "fileStrDate": "1792689428489",
+          "dataType": "traffic"
+        }
+      ]
+    }
+  }
+}

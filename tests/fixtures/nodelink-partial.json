@@ -1,0 +1,40 @@
+{
+  "header": {
+    "result": "정상 처리되었습니다.",
+    "state": "OK"
+  },
+  "body": {
+    "dataLen": 1,
+    "data": {
+      "fileVOList": [
+        {
+          "rowSeq": 1,
+          "seq": "201",
+          "fileSeq": null,
+          "fileStreCoursNm": null,
+          "streFileNm": null,
+          "fileOrgStreNm": null,
+          "fileExtsnNm": null,
+          "fileCn": null,
+          "fileMg": 0,
+          "nodeFileSeq": "0",
+          "nodeFileStreCoursNm": "/ntic/upload/DF/2024/12/27/",
+          "nodeStreFileNm": "f4100bd3-2cac-446b-b521-eaa9849d0a5d",
+          "nodeOrginlFileNm": "[2024-12-27]NODELINKDATA",
+          "nodeFileExtsnNm": "zip",
+          "nodeFileMg": 0.19,
+          "histFileSeq": null,
+          "histFileStreCoursNm": null,
+          "histStreFileNm": null,
+          "histOrginlFileNm": null,
+          "histFileExtsnNm": null,
+          "histFileMg": null,
+          "updtCn": "안녕하세요 국가교통정보센터입니다.\r\n\r\n세종포천선 구리안성구간(남구리IC~남안성JC) 개통으로 인한 긴급 표준노드링크 배포자료입니다.\r\n\r\n다만, 기존과 같은 전국 표준노드링크 자료가 아닌 구리~안성구간 개통구간의 표준노드링크 자료입니다.\r\n추후 25년 1월 말 배포시 구축기준에 의해 작성한 전국표준노드링크 자료에 수정하여 포함하겠습니다.\r\n\r\n추가 문의사항은 아래 연락처로 연락주시면 답변드리겠습니다.\r\n- E-mail : itscenter2@korea.kr\r\n- Tel : 044)862-4333, 4316\r\n감사합니다.",
+          "atchFileId": "DF_201",
+          "oprtrId": null,
+          "regDt": 1735284699000
+        }
+      ]
+    }
+  }
+}

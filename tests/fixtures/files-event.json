@@ -1,0 +1,51 @@
+{
+  "header": {
+    "result": "정상 처리되었습니다.",
+    "state": "OK"
+  },
+  "body": {
+    "dataLen": 1,
+    "data": {
+      "fileVOList": [
+        {
+          "fileId": "event_-608221885",
+          "fileSeq": 0,
+          "fileStreCoursNm": null,
+          "fileStreNm": "20261023.zip",
+          "fileOrgStreNm": null,
+          "fileExtsnNm": null,
+          "fileContent": null,
+          "fileMg": 0,
+          "fileSize": 102937,
+          "workingDirectory": "2026",
+          "dwldDt": null,
+          "openDataId": null,
+          "conectMberTy": 0,
+          "mberId": null,
+          "fileDate": 0,
+          "fileStrDate": "1792778419921",
+          "dataType": "event"
+        },
+        {
+          "fileId": "event_-611472192",
+          "fileSeq": 0,
+          "fileStreCoursNm": null,
+          "fileStreNm": "20261022.zip",
+          "fileOrgStreNm": null,
+          "fileExtsnNm": null,
+          "fileContent": null,
+          "fileMg": 0,
+          "fileSize": 110345,
+          "workingDirectory": "2026",
+          "dwldDt": null,
+          "openDataId": null,
+          "conectMberTy": 0,
+          "mberId": null,
+          "fileDate": 0,
+          "fileStrDate": "1792692018302",
+          "dataType": "event"
+        }
+      ]
+    }
+  }
+}

@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from typing import Any, cast
+from urllib.parse import urlsplit
 
 from .exceptions import KritsSchemaError
-from .models import Road, RoadEvent, RoadType, TrafficLink, TrafficSection
+from .models import CatalogChanges, Cctv, DataSnapshot, Detour, DetourRoad, FileAttachment, NodeLinkRelease, Road, RoadEvent, RoadType, TrafficLink, TrafficSection, TravelTime
 
 
 def decode_json(text: str) -> object:
@@ -174,3 +176,243 @@ def parse_events(value: object, road_type: RoadType | None = None) -> tuple[Road
                 _optional_text(info.get("mssageCn"), "mssageCn"), dict(info),
             ))
     return tuple(result)
+
+
+def _list(value: object, name: str) -> list[Any]:
+    if not isinstance(value, list):
+        raise KritsSchemaError(f"{name}: 배열이 필요합니다")
+    return value
+
+
+def _data(value: object) -> dict[str, Any]:
+    payload = _object(value, "응답")
+    if _object(payload.get("header"), "header").get("state") != "OK":
+        raise KritsSchemaError("정상 응답 header가 없습니다")
+    return _object(_object(payload.get("body"), "body").get("data"), "data")
+
+
+def parse_cctvs(value: object) -> tuple[Cctv, ...]:
+    """CCTV 검색은 envelope 없는 배열이다. 빈 배열과 형식 오류를 구분한다."""
+    result = []
+    for row in _list(value, "CCTV"):
+        item = _object(row, "CCTV 항목")
+        result.append(Cctv(_text(item.get("cctvId"), "cctvId"), _text(item.get("instlLcDc"), "instlLcDc"),
+                           _optional_text(item.get("routeNo"), "routeNo"),
+                           _optional_text(item.get("roadNo"), "roadNo"),
+                           _optional_text(item.get("linkId"), "linkId"), dict(item)))
+    return tuple(result)
+
+
+def parse_detour_roads(value: object) -> tuple[DetourRoad, ...]:
+    """공개 고속도로 우회 목록 DOM의 문자열 식별자를 검증한다."""
+    rows = _list(value, "우회 도로 DOM")
+    if not rows:
+        raise KritsSchemaError("우회 도로 DOM이 비어 있습니다")
+    result = []
+    seen = set()
+    for row in rows:
+        item = _object(row, "우회 도로")
+        number = _text(item.get("road_number"), "road_number")
+        if not number.isascii() or not number.isdigit() or number in seen:
+            raise KritsSchemaError("우회 노선번호 형식이 다르거나 중복됐습니다")
+        seen.add(number)
+        result.append(DetourRoad(number, _text(item.get("name"), "name")))
+    return tuple(result)
+
+
+def parse_detours(value: object, road_number: str) -> tuple[Detour, ...]:
+    """양방향 배열을 보존하고 노선·방향 계약을 교차 검증한다."""
+    sections = _object(_data(value).get("SECTIONS"), "SECTIONS")
+    result = []
+    for key, direction in (("DOWNROAD", "1"), ("UPROAD", "2")):
+        for row in _list(sections.get(key), key):
+            item = _object(row, "우회 구간")
+            if item.get("ROAD_NO") != road_number or item.get("SCTN_TY_CODE") != "EX" or item.get("DRC_CODE") != direction:
+                raise KritsSchemaError("우회 노선번호/도로종류/방향이 조회 조건과 다릅니다")
+            result.append(Detour(_text(item.get("MLN_SCTN_ID"), "MLN_SCTN_ID"),
+                                 _text(item.get("DETU_ID"), "DETU_ID"), road_number,
+                                 _text(item.get("SCTN_NM"), "SCTN_NM"), direction,
+                                 _number(item.get("MAIN_PASNG_SPED"), "MAIN_PASNG_SPED"),
+                                 _number(item.get("DETOUR_PASNG_SPED"), "DETOUR_PASNG_SPED"),
+                                 _number(item.get("MAIN_PASNG_TIME"), "MAIN_PASNG_TIME"),
+                                 _number(item.get("DETOUR_PASNG_TIME"), "DETOUR_PASNG_TIME"), dict(item)))
+    return tuple(result)
+
+
+def parse_origins(value: object) -> tuple[str, ...]:
+    """기점 선택 DOM을 검증한다. 누락 DOM을 정상 빈 목록으로 보지 않는다."""
+    rows = _list(value, "기점 DOM")
+    origins = tuple(_text(row, "기점") for row in rows)
+    if not origins or len(set(origins)) != len(origins):
+        raise KritsSchemaError("기점 DOM이 비어 있거나 중복됐습니다")
+    return origins
+
+
+def parse_travel_times(value: object, origin: str) -> tuple[TravelTime, ...]:
+    """기점 문자열로 조회한 COURSE 배열을 검증한다."""
+    result = []
+    for row in _list(_data(value).get("COURSE"), "COURSE"):
+        item = _object(row, "도시간 항목")
+        if item.get("BSPOTNM") != origin:
+            raise KritsSchemaError("도시간 응답 기점이 조회 조건과 다릅니다")
+        result.append(TravelTime(_text(item.get("GRPID"), "GRPID"),
+                                 _text(item.get("GRPCOURSNM"), "GRPCOURSNM"), origin,
+                                 _text(item.get("ESPOTNM"), "ESPOTNM"),
+                                 _number(item.get("REQRETIME"), "REQRETIME"), dict(item)))
+    return tuple(result)
+
+
+def open_data_ids(value: object) -> tuple[str, ...]:
+    """DOM 갱신 대기에도 쓰는 파일 ID를 엄격하게 검증한다."""
+    ids = tuple(_text(_object(row, "파일 행").get("fileId"), "fileId")
+                for row in _list(_data(value).get("fileVOList"), "fileVOList"))
+    if len(set(ids)) != len(ids):
+        raise KritsSchemaError("파일 ID가 중복됐습니다")
+    return ids
+
+
+def _file_path(value: object, pattern: str) -> str:
+    path = _text(value, "첨부 href")
+    # 원문 DOM href만 허용하며 외부 origin·query·조각·인코딩된 경로 이탈을 거부한다.
+    if re.fullmatch(pattern, path) is None:
+        raise KritsSchemaError("공개 첨부 경로가 허용 계약과 다릅니다")
+    return "https://www.its.go.kr" + path
+
+
+def parse_open_data(value: object, service: str, links: object) -> tuple[FileAttachment, ...]:
+    """기간 응답과 실제 DOM 첨부를 ID·파일명·경로로 교차 검증한다."""
+    ids = open_data_ids(value)
+    rows = _list(_data(value).get("fileVOList"), "fileVOList")
+    anchors = _list(links, "첨부 DOM")
+    if len(anchors) != len(ids):
+        raise KritsSchemaError("파일 응답과 DOM 첨부 수가 다릅니다")
+    result = []
+    for row, anchor in zip(rows, anchors):
+        item = _object(row, "파일 행");link = _object(anchor, "첨부 DOM 행")
+        name = _text(item.get("fileStreNm"), "fileStreNm")
+        directory = _text(item.get("workingDirectory"), "workingDirectory")
+        if item.get("dataType") != service or link.get("id") != item["fileId"] or link.get("name") != name:
+            raise KritsSchemaError("파일 종류/ID/파일명이 DOM과 다릅니다")
+        url = _file_path(link.get("href"), r"/opendata/fileDownload/(traffic|event|vms)/[0-9]{4}/[A-Za-z0-9_-]+\.[A-Za-z0-9]+")
+        if urlsplit(url).path != f"/opendata/fileDownload/{service}/{directory}/{name}":
+            raise KritsSchemaError("파일 응답과 DOM 다운로드 경로가 다릅니다")
+        sequence = _count(item.get("fileSeq"), "fileSeq")
+        result.append(FileAttachment(service, item["fileId"], str(sequence), name, url,
+                                     _count(item.get("fileSize"), "fileSize"), dict(item)))
+    return tuple(result)
+
+
+def parse_weak_files(value: object) -> tuple[FileAttachment, ...]:
+    """정적 취약구간 CSV의 이름 있는 링크와 중복 아이콘 링크를 병합한다."""
+    rows = _list(value, "취약구간 DOM")
+    if not rows:
+        raise KritsSchemaError("취약구간 파일 DOM이 비어 있습니다")
+    result: dict[str, FileAttachment] = {}
+    all_urls = set()
+    for row in rows:
+        item = _object(row, "취약구간 첨부")
+        url = _file_path(item.get("href"), r"/file/opendata/weakSections/[A-Za-z0-9_-]+\.csv")
+        all_urls.add(url)
+        name = item.get("name")
+        if not isinstance(name, str):
+            raise KritsSchemaError("취약구간 파일명이 문자열이 아닙니다")
+        if not name.strip():
+            continue
+        if url in result and result[url].name != name.strip():
+            raise KritsSchemaError("같은 취약구간 경로의 파일명이 서로 다릅니다")
+        result[url] = FileAttachment("weakSection", None, None, name.strip(), url, None, dict(item))
+    if set(result) != all_urls:
+        raise KritsSchemaError("이름 없는 취약구간 첨부만 있습니다")
+    return tuple(result.values())
+
+
+def _node_rows(value: object) -> list[dict[str, Any]]:
+    rows = [_object(row, "노드링크 배포") for row in _list(_data(value).get("fileVOList"), "fileVOList")]
+    if any("updtCn" not in row for row in rows):
+        raise KritsSchemaError("노드링크 배포 설명 필드가 누락됐습니다")
+    for key in ("seq", "atchFileId"):
+        ids = [_text(row.get(key), key) for row in rows]
+        if len(ids) != len(set(ids)):
+            raise KritsSchemaError(f"노드링크 {key}가 중복됐습니다")
+    return rows
+
+
+def _node_parts(row: dict[str, Any]) -> list[tuple[str, str, str]]:
+    parts = []
+    for prefix in ("node", "hist"):
+        keys = (prefix + "OrginlFileNm", prefix + "FileExtsnNm", prefix + "FileSeq", prefix + "FileMg")
+        if any(key not in row for key in keys):
+            raise KritsSchemaError("노드링크 첨부 필드가 누락됐습니다")
+        stem = _optional_text(row[keys[0]], keys[0])
+        if stem is None:
+            if row[keys[3]] is not None:
+                _number(row[keys[3]], keys[3])
+            if row[keys[1]] is not None or row[keys[2]] is not None or row[keys[3]] not in (None, 0):
+                raise KritsSchemaError("없는 노드링크 첨부의 메타데이터가 남아 있습니다")
+            continue
+        ext = _text(row[keys[1]], keys[1]);seq = _text(row[keys[2]], keys[2])
+        if re.fullmatch(r"[A-Za-z0-9]+", ext) is None or re.fullmatch(r"[0-9]+", seq) is None:
+            raise KritsSchemaError("노드링크 첨부 확장자/번호 형식이 다릅니다")
+        if row[keys[3]] is not None:
+            _number(row[keys[3]], keys[3])
+        parts.append((prefix, seq, stem + "." + ext))
+    if not parts or len({seq for _prefix, seq, _name in parts}) != len(parts):
+        raise KritsSchemaError("노드링크 배포에 첨부가 없거나 번호가 충돌합니다")
+    return parts
+
+
+def nodelink_dom_ids(value: object) -> tuple[str, ...]:
+    """자료실 DOM 첨부 ID의 기대 순서를 응답의 실제 첨부 그룹에서 읽는다."""
+    return tuple(("NODE_" if prefix == "node" else "HIST_") + row["atchFileId"]
+                 for row in _node_rows(value) for prefix, _seq, _name in _node_parts(row))
+
+
+def parse_nodelink_releases(value: object, links: object) -> tuple[NodeLinkRelease, ...]:
+    """명시적 null 첨부와 누락 필드를 구분하고 실제 ID/번호/파일명/DOM 경로를 검증한다."""
+    anchors = _list(links, "노드링크 첨부 DOM")
+    expected_ids = nodelink_dom_ids(value)
+    if len(anchors) != len(expected_ids):
+        raise KritsSchemaError("노드링크 응답과 DOM 첨부 수가 다릅니다")
+    offset = 0
+    result = []
+    for row in _node_rows(value):
+        files: dict[str, FileAttachment] = {}
+        group = row["atchFileId"]
+        for prefix, sequence, name in _node_parts(row):
+            anchor = _object(anchors[offset], "노드링크 첨부")
+            if anchor.get("id") != expected_ids[offset] or anchor.get("sequence") != sequence or anchor.get("name") != name:
+                raise KritsSchemaError("노드링크 응답과 DOM ID/첨부번호/파일명이 다릅니다")
+            url = _file_path(anchor.get("href"), r"/opendata/nodelinkFileSDownload/[A-Za-z0-9_-]+/[0-9]+")
+            if urlsplit(url).path != f"/opendata/nodelinkFileSDownload/{group}/{sequence}":
+                raise KritsSchemaError("노드링크 DOM과 실제 첨부 ID/번호가 다릅니다")
+            # FileMg는 표시용 반올림 MB다. 정확한 바이트 수를 만들어내지 않는다.
+            files[prefix] = FileAttachment("nodelink", group, sequence, name, url, None,
+                                           {**row, "role": prefix})
+            offset += 1
+        result.append(NodeLinkRelease(row["seq"], group, _optional_text(row["updtCn"], "updtCn"),
+                                      files.get("node"), files.get("hist"), dict(row)))
+    return tuple(result)
+
+
+def compare_nodelink_catalogs(
+    before: DataSnapshot[NodeLinkRelease], after: DataSnapshot[NodeLinkRelease],
+) -> CatalogChanges:
+    """같은 자료실·기간의 추가/미관찰/메타데이터 변경을 계산한다. 원본은 삭제하지 않는다."""
+    if before.scope != after.scope or before.source_url != after.source_url:
+        raise ValueError("같은 출처와 조회 범위의 자료실 목록만 비교할 수 있습니다")
+    old = {row.release_id: row for row in before.items}
+    new = {row.release_id: row for row in after.items}
+    if len(old) != len(before.items) or len(new) != len(after.items):
+        raise KritsSchemaError("비교 목록의 배포 ID가 중복됐습니다")
+
+    def metadata(row: NodeLinkRelease) -> tuple[object, ...]:
+        # rowSeq는 현재 목록의 순번이므로 앞에 새 배포가 추가돼도 변경으로 세지 않는다.
+        files = tuple(None if file is None else (file.service, file.file_id, file.attachment_id,
+                                                 file.name, file.download_url, file.size_bytes)
+                      for file in (row.data_file, row.history_file))
+        return (row.attachment_group_id, row.description, files,
+                {key: val for key, val in row.raw.items() if key != "rowSeq"})
+
+    return CatalogChanges(tuple(key for key in new if key not in old),
+                          tuple(key for key in old if key not in new),
+                          tuple(key for key in new if key in old and metadata(old[key]) != metadata(new[key])))

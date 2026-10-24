@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Any, Generic, Literal, TypeVar
 
 RoadType = Literal["highway", "national"]
+OpenDataService = Literal["traffic", "event", "vms", "weakSection"]
 T = TypeVar("T")
 
 
@@ -79,3 +80,85 @@ class RoadEvent:
     link_id: str | None
     message: str | None
     raw_info: dict[str, Any] = field(repr=False)
+
+
+@dataclass(frozen=True, slots=True)
+class Cctv:
+    """검색 화면의 CCTV 메타데이터. 영상 URL/좌표계의 의미는 추정하지 않는다."""
+
+    cctv_id: str
+    name: str
+    route_id: str | None
+    road_number: str | None
+    link_id: str | None
+    raw: dict[str, Any] = field(repr=False)
+
+
+@dataclass(frozen=True, slots=True)
+class DetourRoad:
+    """우회 화면의 노선번호. 소통 화면의 4자리 도로 ID와 구분한다."""
+
+    road_number: str
+    name: str
+
+
+@dataclass(frozen=True, slots=True)
+class Detour:
+    """현재 고속도로 본선·우회 비교. 시간은 초, 속도는 km/h다."""
+
+    section_id: str
+    detour_id: str
+    road_number: str
+    name: str
+    direction: str
+    main_speed_kmh: float
+    detour_speed_kmh: float
+    main_time_seconds: float
+    detour_time_seconds: float
+    raw: dict[str, Any] = field(repr=False)
+
+
+@dataclass(frozen=True, slots=True)
+class TravelTime:
+    """공개 기점 선택 위젯의 도시간 소요시간. 분 단위이며 경로 ID를 보존한다."""
+
+    group_id: str
+    route_name: str
+    origin: str
+    destination: str
+    minutes: float
+    raw: dict[str, Any] = field(repr=False)
+
+
+@dataclass(frozen=True, slots=True)
+class FileAttachment:
+    """공개 첨부 발견 결과. DOM에 없는 식별자/바이트 수는 None이며 다운로드 완료가 아니다."""
+
+    service: str
+    file_id: str | None
+    attachment_id: str | None
+    name: str
+    download_url: str
+    size_bytes: int | None
+    raw: dict[str, Any] = field(repr=False)
+
+
+@dataclass(frozen=True, slots=True)
+class NodeLinkRelease:
+    """자료실 게시 배포. 배포 ID와 실제 첨부 그룹 ID를 분리한다."""
+
+    release_id: str
+    attachment_group_id: str
+    description: str | None
+    data_file: FileAttachment | None
+    history_file: FileAttachment | None
+    raw: dict[str, Any] = field(repr=False)
+
+
+@dataclass(frozen=True, slots=True)
+class CatalogChanges:
+    """같은 조회 범위의 관찰 차이. missing은 삭제나 폐기를 뜻하지 않는다."""
+
+    added_ids: tuple[str, ...]
+    missing_ids: tuple[str, ...]
+    changed_ids: tuple[str, ...]
