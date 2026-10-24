@@ -91,6 +91,12 @@ live 테스트/조사 도구만 `KRITS_CHROMIUM_EXECUTABLE`을 선택적으로 �
 
 ## 개발 검증
 
+CCTV 메타데이터는 `await client.search_cctvs("서울")`, 현재 고속도로 우회는
+`await client.list_detour_roads()`에서 얻은 `road_number`로 `await client.get_detours("1")`,
+도시간은 `await client.list_travel_origins()`의 도시로 `await client.get_travel_times("대전")`을
+사용한다. 영상은 내려받지 않는다. 우회 시간은 초, 도시간 시간은 분이다.
+지원 범위와 공개 화면의 제한은 [상세 계약](docs/cctv-detour-travel.md)에 기록했다.
+
 ```bash
 python tools/check_docs.py
 python -m compileall src/krits tests

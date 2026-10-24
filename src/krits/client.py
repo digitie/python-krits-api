@@ -2,20 +2,23 @@
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+import asyncio
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 import re
 from typing import Literal
 
-from playwright.async_api import BrowserContext, Error as PlaywrightError, Page, Request, Response
+from playwright.async_api import BrowserContext, Error as PlaywrightError, Locator, Page, Request, Response
 
 from ._browser import BASE_URL, BrowserSession
 from ._ratelimit import AsyncTokenBucket
 from .exceptions import (
     KritsAccessError, KritsNetworkError, KritsProviderError, KritsRateLimitError, KritsSchemaError,
 )
-from .models import DataSnapshot, PageSnapshot, Road, RoadEvent, RoadType, TrafficSection
-from .parse import decode_json, parse_events, parse_roads, parse_traffic
+from .models import Cctv, DataSnapshot, Detour, DetourRoad, PageSnapshot, Road, RoadEvent, RoadType, TrafficSection, TravelTime
+from .parse import (decode_json, parse_cctvs, parse_detour_roads, parse_detours, parse_events,
+                    parse_origins, parse_roads, parse_traffic, parse_travel_times)
 
 PublicPage = Literal["opendata", "traffic", "outbreak", "cctv", "detour", "travel_time", "nodelink"]
 _PATHS: dict[str, str] = {
@@ -83,6 +86,7 @@ async def _open_page(browser_page: Page, page: PublicPage) -> str:
 async def _action_json(
     page: Page, endpoint: str, action: Callable[[], Awaitable[object]],
     expected: dict[str, object],
+    *, flat_request: bool = False,
 ) -> object:
     """이번 동작에서 시작한 요청만 관찰하며 listener를 성공·실패·취소 모두에서 제거한다."""
     requests: set[Request] = set()
@@ -99,9 +103,14 @@ async def _action_json(
             return
         try:
             encoded = request.post_data_json
-            if not isinstance(encoded, dict) or not isinstance(encoded.get("body"), dict):
+            if not isinstance(encoded, dict):
                 return
-            data = encoded["body"].get("data")
+            if flat_request:
+                data = encoded
+            elif isinstance(encoded.get("body"), dict):
+                data = encoded["body"].get("data")
+            else:
+                return
             if isinstance(data, dict) and all(data.get(key) == value for key, value in expected.items()):
                 requests.add(request)
         except (ValueError, KeyError, TypeError, PlaywrightError):
@@ -133,6 +142,42 @@ async def _action_json(
     finally:
         page.remove_listener("request", track)
         page.remove_listener("response", observe_denial)
+
+
+@asynccontextmanager
+async def _travel_widget(page: Page) -> AsyncIterator[tuple[Locator, tuple[str, ...], Callable[[], None]]]:
+    """초기 자동 조회부터 선택 결과까지 같은 endpoint의 거부를 유지한다."""
+    endpoint = "/map/getCityReqTimeByGroup"
+    denied: int | None = None
+
+    def observe(response: Response) -> None:
+        nonlocal denied
+        if response.url == BASE_URL + endpoint and response.status in (401, 403, 429):
+            denied = denied or response.status
+
+    def check() -> None:
+        if denied is not None:
+            _check_status(denied)
+
+    # 이전 문서 timer와 분리한 뒤 최초 요청 이전부터 관찰한다.
+    await page.goto("about:blank")
+    page.on("response", observe)
+    try:
+        await _action_json(page, endpoint, lambda: _open_page(page, "traffic"), {})
+        check()
+        select = page.locator(".region_list .select select")
+        await select.wait_for(state="attached")
+        origins = parse_origins(await select.locator("option").evaluate_all("es => es.map(e => e.value)"))
+        check()
+        yield select, origins, check
+        check()
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        check()
+        raise
+    finally:
+        page.remove_listener("response", observe)
 
 
 class KritsClient:
@@ -237,3 +282,68 @@ class KritsClient:
             )
             return DataSnapshot(parse_events(payload, road_type), BASE_URL + _PATHS["outbreak"],
                                 datetime.now(timezone.utc), {"road_type": road_type or "all", "excluded": "DISASTER"})
+
+    async def search_cctvs(self, keyword: str) -> DataSnapshot[Cctv]:
+        """CCTV명으로 메타데이터만 검색한다. 영상 재생/다운로드 요청은 하지 않는다."""
+        if not isinstance(keyword, str) or not keyword.strip() or len(keyword) > 100:
+            raise ValueError("keyword는 1~100자의 비어 있지 않은 문자열이어야 합니다")
+        keyword = keyword.strip()
+        async with self._browser.operation() as page:
+            await _open_page(page, "cctv")
+            await page.locator("#inp_search").fill(keyword)
+            payload = await _action_json(page, "/map/getCctvSearch", page.locator("#btn_search").click,
+                                         {"searchKeyword": keyword}, flat_request=True)
+            return DataSnapshot(parse_cctvs(payload), BASE_URL + _PATHS["cctv"],
+                                datetime.now(timezone.utc), {"keyword": keyword, "content": "metadata"})
+
+    async def list_detour_roads(self) -> DataSnapshot[DetourRoad]:
+        """현재 고속도로 우회 화면의 노선번호 목록을 반환한다."""
+        async with self._browser.operation() as page:
+            await _open_page(page, "detour")
+            rows = page.locator(".rt_box li.dep1")
+            await rows.first.wait_for(state="attached")
+            roads = parse_detour_roads(await rows.evaluate_all(_ROADS_SCRIPT))
+            return DataSnapshot(roads, BASE_URL + _PATHS["detour"], datetime.now(timezone.utc),
+                                {"road_type": "highway", "mode": "current"})
+
+    async def get_detours(self, road_number: str) -> DataSnapshot[Detour]:
+        """현재 고속도로의 양방향 본선·우회 비교를 조회한다. road_number는 노선번호다."""
+        if not isinstance(road_number, str) or re.fullmatch(r"[0-9]{1,4}", road_number) is None:
+            raise ValueError("road_number는 list_detour_roads의 노선번호 문자열이어야 합니다")
+        async with self._browser.operation() as page:
+            await _open_page(page, "detour")
+            rows = page.locator(".rt_box li.dep1")
+            await rows.first.wait_for(state="attached")
+            roads = parse_detour_roads(await rows.evaluate_all(_ROADS_SCRIPT))
+            index = next((i for i, road in enumerate(roads) if road.road_number == road_number), None)
+            if index is None:
+                raise ValueError("공개 우회 목록에 없는 노선번호입니다")
+            payload = await _action_json(page, "/map/getMainToDetourSectionsByRoad",
+                                         rows.nth(index).locator("a.title").click,
+                                         {"searchType": "rt", "roadNo": int(road_number), "sctnTyCode": "EX", "keyword": ""})
+            return DataSnapshot(parse_detours(payload, road_number), BASE_URL + _PATHS["detour"],
+                                datetime.now(timezone.utc), {"road_type": "highway", "road_number": road_number, "mode": "current"})
+
+    async def list_travel_origins(self) -> DataSnapshot[str]:
+        """소통 지도 기점 선택 위젯의 지원 도시를 반환한다."""
+        async with self._browser.operation() as page:
+            async with _travel_widget(page) as (_select, origins, _check):
+                return DataSnapshot(origins, BASE_URL + _PATHS["traffic"], datetime.now(timezone.utc), {"widget": "region_list"})
+
+    async def get_travel_times(self, origin: str) -> DataSnapshot[TravelTime]:
+        """소통 지도 기점 위젯을 선택해 도시간 소요시간을 분 단위로 조회한다."""
+        if not isinstance(origin, str) or not origin.strip() or len(origin) > 100:
+            raise ValueError("origin은 list_travel_origins의 도시 문자열이어야 합니다")
+        async with self._browser.operation() as page:
+            async with _travel_widget(page) as (select, origins, check):
+                if origin not in origins:
+                    raise ValueError("공개 기점 목록에 없는 도시입니다")
+
+                async def choose() -> object:
+                    check()
+                    # 커스텀 셀렉트가 숨긴 원래 select의 값·change 이벤트다.
+                    return await select.select_option(origin, force=True)
+
+                payload = await _action_json(page, "/map/getCityReqTimeByGroup", choose, {"grpIds": origin})
+                return DataSnapshot(parse_travel_times(payload, origin), BASE_URL + _PATHS["traffic"],
+                                    datetime.now(timezone.utc), {"origin": origin, "widget": "region_list"})

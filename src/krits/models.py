@@ -76,3 +76,51 @@ class RoadEvent:
     link_id: str | None
     message: str | None
     raw_info: dict[str, Any] = field(repr=False)
+
+
+@dataclass(frozen=True, slots=True)
+class Cctv:
+    """검색 화면의 CCTV 메타데이터. 영상 URL/좌표계의 의미는 추정하지 않는다."""
+
+    cctv_id: str
+    name: str
+    route_id: str | None
+    road_number: str | None
+    link_id: str | None
+    raw: dict[str, Any] = field(repr=False)
+
+
+@dataclass(frozen=True, slots=True)
+class DetourRoad:
+    """우회 화면의 노선번호. 소통 화면의 4자리 도로 ID와 구분한다."""
+
+    road_number: str
+    name: str
+
+
+@dataclass(frozen=True, slots=True)
+class Detour:
+    """현재 고속도로 본선·우회 비교. 시간은 초, 속도는 km/h다."""
+
+    section_id: str
+    detour_id: str
+    road_number: str
+    name: str
+    direction: str
+    main_speed_kmh: float
+    detour_speed_kmh: float
+    main_time_seconds: float
+    detour_time_seconds: float
+    raw: dict[str, Any] = field(repr=False)
+
+
+@dataclass(frozen=True, slots=True)
+class TravelTime:
+    """공개 기점 선택 위젯의 도시간 소요시간. 분 단위이며 경로 ID를 보존한다."""
+
+    group_id: str
+    route_name: str
+    origin: str
+    destination: str
+    minutes: float
+    raw: dict[str, Any] = field(repr=False)

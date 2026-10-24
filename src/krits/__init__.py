@@ -11,10 +11,11 @@ from .exceptions import (
     KritsRateLimitError,
     KritsSchemaError,
 )
-from .models import DataSnapshot, PageSnapshot, Road, RoadEvent, RoadType, TrafficLink, TrafficSection
+from .models import Cctv, DataSnapshot, Detour, DetourRoad, PageSnapshot, Road, RoadEvent, RoadType, TrafficLink, TrafficSection, TravelTime
 
 __all__ = [
     "AsyncTokenBucket", "KritsAccessError", "KritsClient", "KritsClosedError", "KritsError",
     "KritsNetworkError", "KritsRateLimitError", "KritsSchemaError", "PageSnapshot", "PublicPage",
     "DataSnapshot", "Road", "RoadEvent", "RoadType", "TrafficLink", "TrafficSection", "KritsProviderError",
+    "Cctv", "Detour", "DetourRoad", "TravelTime",
 ]

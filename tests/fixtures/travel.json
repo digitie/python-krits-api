@@ -1,0 +1,55 @@
+{
+  "header": {
+    "result": "정상 처리되었습니다.",
+    "state": "OK"
+  },
+  "body": {
+    "dataLen": 1,
+    "data": {
+      "COURSE": [
+        {
+          "GRPCOURSNM": "중부-남해선",
+          "REQRETIME": 166,
+          "BSPOTNM": "대전",
+          "ESPOTNM": "부산",
+          "GRPID": "DJBS02"
+        },
+        {
+          "GRPCOURSNM": "중부-광주대구-중부내륙지선",
+          "REQRETIME": 124,
+          "BSPOTNM": "대전",
+          "ESPOTNM": "대구",
+          "GRPID": "DJDG02"
+        },
+        {
+          "GRPCOURSNM": "호남지-호남선",
+          "REQRETIME": 106,
+          "BSPOTNM": "대전",
+          "ESPOTNM": "광주",
+          "GRPID": "DJGJ01"
+        },
+        {
+          "GRPCOURSNM": "경부-중부-영동-동해선",
+          "REQRETIME": 175,
+          "BSPOTNM": "대전",
+          "ESPOTNM": "강릉",
+          "GRPID": "DJGL01"
+        },
+        {
+          "GRPCOURSNM": "경부-중부-수도권제1순환선",
+          "REQRETIME": 99,
+          "BSPOTNM": "대전",
+          "ESPOTNM": "서울",
+          "GRPID": "DJSU02"
+        },
+        {
+          "GRPCOURSNM": "중부-영동-동해선",
+          "REQRETIME": 197,
+          "BSPOTNM": "대전",
+          "ESPOTNM": "양양",
+          "GRPID": "DJYY01"
+        }
+      ]
+    }
+  }
+}
