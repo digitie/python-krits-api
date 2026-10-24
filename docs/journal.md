@@ -3,6 +3,9 @@
 - 기존 T003의 공개 응답 raw.path를 typed EPSG:4326 좌표로 검증한다.
 - 공식 polylineOl.js에서 좌표계와 순서를 대조했다. 다른 provider의 링크나 임의 좌표를 결합하지 않는다.
 - 개별 링크의 속도와 같은 응답의 경로만 지도에 제공한다. 검증·리뷰 완료 전 운영 반영하지 않는다.
+- 최신 main085c329를 통합한 최종 소스2e3555b에서 offline279/99.52%·mypy·CI6개·복구 후 실제 Chromium35개와
+  wheel 설치본73도로/경부361경로 검증 PASS다. James/Popper 독립 재리뷰의 잔여 P0/P1/P2는 없다.
+  WSL 종료로 중단된 첫 전체 live는 성공 근거에서 제외한다. 상세는 [증빙](validation/traffic-link-geometry.md)이다.
 
 # 작업 기록
 

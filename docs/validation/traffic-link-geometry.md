@@ -14,3 +14,16 @@ T003이 머지된61b357f 위의 Transport 지도 소비를 위한 작은 후속�
   로컬 fixture에 명시적 data favicon을 추가해 실행 환경 차이를 제거했다. redirect 허용 정책·런타임은 바꾸지 않았고
   금지 대상 전송 없음과 허용된 redirect의 정확한 요청 목록을 계속 단언한다. 재실행12개 모두 통과했다.
 - b3af6bc의 Python3.11~3.14·typecheck/build·문서 CI가 모두 통과했다. James/Popper 독립 리뷰2건의 잔여 P0/P1/P2는 없다. Transport의 격리 설치본(런타임동일417e3d5)에서 실제 API73도로·경부361경로와375/1440px 지도 렌더/상세 이동을 확인했다. 머지는 별도 승인·통합 단계로 남긴다. API키/제3자지도키를 추출·재사용하지 않았다.
+
+## 최신 main 통합 소스의 최종 검증
+
+- 최종 소스는 `2e3555b`다. main `085c329`의 CCTV·우회·도시간·파일/노드링크 자료실을 일반 merge했고
+  해당 기능의 client/browser/모델/파싱 동작은 후보 diff에서 변경하지 않았다.
+- WSL Python3.13 오프라인279개·coverage99.52%, strict mypy7파일, 문서 링크20개와 최종 소스 CI6개 PASS다.
+- WSL 종료로 중단된 첫 전체 실행은 성공으로 세지 않는다. 환경 복구 후 같은 소스에서
+  `python -m pytest -m live --run-live -x -vv`를 다시 실행해 실제 Chromium35개를 80.27초에 통과했다.
+  기존 Chromium1248을 `KRITS_CHROMIUM_EXECUTABLE`로 명시했으며 인증 API/제3자 키는 사용하지 않았다.
+- wheel/sdist를 빌드하고 editable 설치를 wheel로 교체했다. 소스 트리 밖의 Python에서 site-packages 사용을
+  확인한 뒤 실제73도로·경부361링크/361경로와 tuple 경로 계약을 확인했다.
+- James(데이터 계약·완전성)와 Popper(자원·무결성·오류·테스트)가 `2e3555b`를 독립 재검토했고
+  잔여 P0/P1/P2는 없다. 후속 증빙 변경은 이 최종 소스를 변경하지 않는다.
