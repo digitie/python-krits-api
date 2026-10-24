@@ -20,6 +20,7 @@ ITS 공개 자료실 ─ Chromium 발견 ─ 첨부 다운로드 ─ 형식/크�
 | `_ratelimit.py` | 한 루프의 공유 `AsyncTokenBucket` | asyncio/time |
 | `_cache.py` | 제한된 성공 결과 TTL/LRU·진행 조회 공유·취소 정리 | asyncio, exceptions |
 | `models.py` | frozen dataclass, 출처·수집 시각·범위·원시 필드 | 표준 라이브러리 |
+| `capabilities.py` | 공식12종의 부분 지원·파일·미지원 판정 | 표준 라이브러리 |
 | `parse.py` | JSON/DOM 레코드의 엄격 검증·타입 변환 | models, exceptions |
 | 파일 목록(`client.py/parse.py`) | 기간 검색·실제 DOM 첨부 발견·자료실 관찰 차이 | browser, models |
 | `files.py` | CDP response 스트림·64KiB 청크·길이/HTML/상한 검사 | browser, models, storage |
