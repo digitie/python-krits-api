@@ -148,3 +148,21 @@ def test_constructor_validation():
 async def test_cross_loop_rejected_before_network():
     s3=S3Store(config());s3._loop=object()
     with pytest.raises(RuntimeError):await s3.put_file(None,None)
+
+
+async def test_close_repeated_cancel_while_waiting_active_put_completes_owned_cleanup(stored):
+    store,value=stored;started=asyncio.Event();release=asyncio.Event()
+    async def handler(request):
+        if request.method=='PUT':
+            await request.aread();started.set();await release.wait()
+            return httpx.Response(200,stream=ByteStream(b''))
+        return httpx.Response(200,stream=ByteStream(value.path.read_bytes()))
+    s3=S3Store(config(),max_rps=1000,transport=httpx.MockTransport(handler))
+    put=asyncio.create_task(s3.put_file(store,value));await started.wait();owned=s3._client
+    close=asyncio.create_task(s3.aclose());await asyncio.sleep(0);close.cancel();await asyncio.sleep(0)
+    close.cancel();await asyncio.sleep(0)
+    assert not close.done() and not owned.is_closed
+    with pytest.raises(KritsClosedError):await s3.put_file(store,value)
+    release.set();assert (await put).sha256==value.sha256
+    with pytest.raises(asyncio.CancelledError):await close
+    assert s3._closed and owned.is_closed and s3._client is None

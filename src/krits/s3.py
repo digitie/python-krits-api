@@ -154,17 +154,18 @@ class S3Store:
     async def aclose(self) -> None:
         """진행 중 업로드/검증을 기다린 뒤 소유 HTTP client를 닫는다."""
         self._bind_loop(); self._closing = True
-        async with self._lock:
-            self._closed = True
-            if self._client is not None:
-                task = asyncio.create_task(self._client.aclose())
-                try:
-                    await asyncio.shield(task)
-                except asyncio.CancelledError:
-                    await _settle(task)
-                    raise
-                finally:
+        async def close() -> None:
+            async with self._lock:
+                self._closed = True
+                if self._client is not None:
+                    await self._client.aclose()
                     self._client = None
+        task = asyncio.create_task(close())
+        try:
+            await asyncio.shield(task)
+        except asyncio.CancelledError:
+            await _settle(task)
+            raise
 
     async def put_file(self, store: FileStore, stored: StoredFile) -> S3Object:
         """로컬 재검증 → signed PUT → 실제 GET 크기/SHA-256 검증을 수행한다."""

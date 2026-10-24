@@ -32,6 +32,8 @@ ZIP은 `ZipFile` 객체를 만들기 전에 EOCD·central directory 길이와 �
 절대/드라이브/역슬래시/빈 segment/점·상위 segment/NUL, 대소문자 중복,
 심볼릭 링크·특수 파일·암호화와 크기·압축비 상한 초과를 거부한다.
 지원 압축은 stored/deflate이며 다중 디스크와 ZIP64 EOCD는 현재 명시적 미지원이다.
+central directory는 EOCD 바로 앞의 정확한 선언 위치여야 한다. 다른 영역을 읽게 만드는
+concat offset 보정·directory와 EOCD 사이의 미지원 추가 레코드는 거부한다.
 ZIP64 멤버의 크기 표현은 EOCD가 일반 형식이고 모든 상한을 만족하면 표준 zipfile이 처리한다.
 ZIP 안의 모든 멤버를64KiB씩 EOF까지 읽어 선언 길이와 CRC를 확인한다.
 [Python zipfile](https://docs.python.org/3/library/zipfile.html)의 CRC 검사를 사용하되
@@ -52,6 +54,10 @@ XLSX는 package CRC를 먼저 검사하고 선택 sheet의 저장 셀 값과 수
 XML은 [defusedxml](https://pypi.org/project/defusedxml/)의 명시적 DTD/entity/외부 참조 금지로
 파싱한다. 현재 지원 namespace는 ECMA transitional SpreadsheetML이며 다른 namespace,
 sheet/row/cell 필수 구조 누락과 손상은 오류다. 병합 셀·계산·스타일/매크로 실행을 제공하지 않는다.
+정상 빈 `<sheetData/>`와 필수 컨테이너 누락·중복·내부 namespace 변경은 구분한다.
+공유 문자열의 본문 t/r와 별도 발음 주석 rPh를 합치지 않는다.
+[Open XML 문자열 구조](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.spreadsheet.sharedstringitem)
+상의 본문 문자열만 반환한다.
 
 검사 결과는 `inspections/<원본SHA>/<보고서SHA>.json`에 원자 공개한다. 원본 SHA,
 검사 UTC, kind, CRC 여부, 멤버 길이/CRC, prj/cpg base64 원문, 적용 상한,
@@ -87,6 +93,7 @@ endpoint query/userinfo/path와 안전하지 않은 prefix는 거부한다. 자�
 64KiB 청크·비동기 HTTPX와 같은 루프의 공유 `AsyncTokenBucket`을 사용한다.
 각 PUT/GET은 토큰을 쓰며 redirect·자동 재시도는 없다. 401/403/429는 즉시 오류다.
 GET은 로컬 원본 크기를 상한으로 삼고 전송 압축을 거부한다. 오류 본문은 메모리에 적재하지 않는다.
+종료의 lock 대기부터 소유 HTTP client 정리까지 추적하고 반복 취소에도 끝까지 정리한 뒤 전파한다.
 로컬 원본/manifest/검사 보고서는 그대로 유지한다. 이 API는 S3에 원본 객체를 보관하며
 로컬 manifest나 mutable current 포인터의 동기화/서비스 DB·수명 정책은 소비자가 담당한다.
 

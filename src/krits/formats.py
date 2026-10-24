@@ -77,7 +77,7 @@ def _preflight(path: Path, limits: FileLimits) -> None:
         if count == 65535 or directory_size == 0xFFFFFFFF or offset == 0xFFFFFFFF:
             raise _fail("ZIP64 EOCD는 현재 검사 계약에서 지원하지 않습니다")
         if (count > limits.max_entries or directory_size > limits.max_directory_bytes
-                or offset + directory_size > size - len(tail) + position):
+                or offset + directory_size != size - len(tail) + position):
             raise _fail("ZIP central directory 상한 또는 범위가 잘못됐습니다")
         source.seek(offset); directory_end = offset + directory_size; actual = 0
         while source.tell() < directory_end:
@@ -169,6 +169,31 @@ _NS = {"x": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
 _REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 
 
+def _local(tag: str) -> str:
+    return tag.rsplit("}", 1)[-1]
+
+
+def _rich_text(element: Element, limits: FileLimits) -> str:
+    """본문 t/r만 읽고 별도 발음 주석 rPh를 셀 값에 합치지 않는다."""
+    for node in element.iter():
+        local = _local(node.tag)
+        if local in {"t", "r", "si", "is"} and node.tag != "{" + _NS["x"] + "}" + local:
+            raise _fail("XLSX 문자열 내부 namespace가 다릅니다")
+    direct = element.findall("x:t", _NS); runs = element.findall("x:r", _NS)
+    if len(direct) > 1 or direct and runs:
+        raise _fail("XLSX 문자열 구조가 중복됐습니다")
+    texts = direct[:]
+    for run in runs:
+        run_texts = run.findall("x:t", _NS)
+        if len(run_texts) != 1:
+            raise _fail("XLSX rich text의 필수 t가 없습니다")
+        texts.extend(run_texts)
+    value = "".join(item.text or "" for item in texts)
+    if len(value) > limits.max_field_chars:
+        raise _fail("XLSX 문자열 상한을 넘었습니다")
+    return value
+
+
 def _xml(archive: zipfile.ZipFile, name: str, limits: FileLimits) -> Element:
     info = archive.getinfo(name)
     if info.file_size > limits.max_table_bytes:
@@ -221,21 +246,34 @@ def _xlsx_table(stored: StoredFile, limits: FileLimits, sheet_name: str | None) 
             strings = _xml(archive, "xl/sharedStrings.xml", limits)
             if strings.tag != "{" + _NS["x"] + "}sst":
                 raise _fail("XLSX 공유 문자열 구조가 다릅니다")
-            for item in strings.findall("x:si", _NS):
-                shared_value = "".join(part.text or "" for part in item.findall(".//x:t", _NS))
-                if len(shared_value) > limits.max_field_chars:
-                    raise _fail("XLSX 문자열 상한을 넘었습니다")
-                shared.append(shared_value)
+            for item in strings:
+                if _local(item.tag) == "si":
+                    if item.tag != "{" + _NS["x"] + "}si":
+                        raise _fail("XLSX 공유 문자열 namespace가 다릅니다")
+                    shared.append(_rich_text(item, limits))
         sheet = _xml(archive, member, limits)
         if sheet.tag != "{" + _NS["x"] + "}worksheet":
             raise _fail("XLSX worksheet 구조가 다릅니다")
+        containers = [item for item in sheet if _local(item.tag) == "sheetData"]
+        if len(containers) != 1 or containers[0].tag != "{" + _NS["x"] + "}sheetData":
+            raise _fail("XLSX 필수 sheetData 누락/중복/namespace 오류입니다")
         rows: list[tuple[str | None, ...]] = []; numbers: list[int] = []; formulas: list[CellFormula] = []
-        for row in sheet.findall("x:sheetData/x:row", _NS):
+        for row in containers[0]:
+            if row.tag != "{" + _NS["x"] + "}row":
+                raise _fail("XLSX sheetData 내부 행 구조/namespace가 다릅니다")
             number = int(row.attrib["r"])
             if len(rows) >= limits.max_rows or number <= (numbers[-1] if numbers else 0) or number > 1048576:
                 raise _fail("XLSX 행 상한 또는 행 순서가 잘못됐습니다")
             cells: list[str | None] = []
-            for cell in row.findall("x:c", _NS):
+            for cell in row:
+                if cell.tag == "{" + _NS["x"] + "}extLst":
+                    continue
+                if cell.tag != "{" + _NS["x"] + "}c":
+                    raise _fail("XLSX 행 내부 셀 구조/namespace가 다릅니다")
+                for field_name in ("v", "f", "is"):
+                    fields = [item for item in cell if _local(item.tag) == field_name]
+                    if len(fields) > 1 or any(item.tag != "{" + _NS["x"] + "}" + field_name for item in fields):
+                        raise _fail("XLSX 셀 값/수식/문자열 namespace 또는 중복 오류입니다")
                 column = _column(cell.attrib["r"], number, limits)
                 if column <= len(cells):
                     raise _fail("XLSX 셀 순서/중복이 잘못됐습니다")
@@ -246,7 +284,8 @@ def _xlsx_table(stored: StoredFile, limits: FileLimits, sheet_name: str | None) 
                         raise _fail("XLSX 공유 문자열 참조가 잘못됐습니다")
                     value = shared[int(value)]
                 elif kind == "inlineStr":
-                    value = "".join(item.text or "" for item in cell.findall("x:is//x:t", _NS))
+                    inline = cell.find("x:is", _NS)
+                    value = _rich_text(inline, limits) if inline is not None else None
                 elif kind not in {"n", "b", "str", "e", "d"}:
                     raise _fail("지원하지 않는 XLSX 셀 형식입니다")
                 formula = cell.find("x:f", _NS)

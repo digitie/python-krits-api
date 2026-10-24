@@ -156,3 +156,42 @@ async def test_xlsx_dtd_is_forbidden(tmp_path):
 @pytest.mark.parametrize('kwargs',[{'max_rows':0},{'max_entries':True},{'max_ratio':float('inf')},{'max_ratio':False}])
 def test_invalid_limits(kwargs):
     with pytest.raises(ValueError):FileLimits(**kwargs)
+
+
+@pytest.mark.parametrize('content',[
+    '', '<sheetData/><sheetData/>', '<sheetData xmlns="wrong"><row/></sheetData>',
+    '<sheetData><row xmlns="wrong" r="1"/></sheetData>',
+    '<sheetData><row r="1"><c xmlns="wrong" r="A1"/></row></sheetData>',
+    '<sheetData><row r="1"><c r="A1"><v xmlns="wrong">001</v></c></row></sheetData>',
+    '<sheetData><row r="1"><c r="A1"><v>1</v><v>2</v></c></row></sheetData>',
+    '<sheetData><row r="1"><c r="A1"><f xmlns="wrong">1+1</f><v>2</v></c></row></sheetData>',
+    '<sheetData><row r="1"><c r="A1" t="inlineStr"><is><t xmlns="wrong">001</t></is></c></row></sheetData>',
+])
+async def test_xlsx_missing_duplicate_or_wrong_internal_namespace_is_not_empty(tmp_path,content):
+    sheet='<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'+content+'</worksheet>'
+    store,stored=stored_file(tmp_path,workbook_bytes(sheet=sheet))
+    with pytest.raises(KritsIntegrityError):await read_xlsx(store,stored)
+    assert not (tmp_path/'inspections').exists()
+
+
+async def test_xlsx_explicit_empty_sheet_and_phonetic_annotation(tmp_path):
+    ns='http://schemas.openxmlformats.org/spreadsheetml/2006/main'
+    store,stored=stored_file(tmp_path/'empty',workbook_bytes(sheet=f'<worksheet xmlns="{ns}"><sheetData/></worksheet>'))
+    assert (await read_xlsx(store,stored)).rows==()
+    shared=f'<sst xmlns="{ns}"><si><r><t>00</t></r><r><t>1</t></r><rPh sb="0" eb="3"><t>annotation</t></rPh></si></sst>'
+    other,value=stored_file(tmp_path/'rich',workbook_bytes(shared=shared))
+    assert (await read_xlsx(other,value)).rows[0][0]=='001'
+
+
+async def test_zip_preflight_rejects_concat_directory_before_zipfile_allocation(tmp_path,monkeypatch):
+    original=bytearray(archive_bytes([('a',b'1'),('b',b'2')]))
+    central=original.find(b'PK\x01\x02');end=original.rfind(b'PK\x05\x06')
+    directory_size=struct.unpack_from('<I',original,end+12)[0]
+    fake=bytearray(original[central:central+46])
+    struct.pack_into('<3H',fake,28,1,0,directory_size-47)
+    fake.extend(b'q'+b'x'*(directory_size-47))
+    struct.pack_into('<HH',original,end+8,1,1);struct.pack_into('<I',original,end+16,0)
+    store,stored=stored_file(tmp_path,bytes(fake+original))
+    def forbidden(*_args,**_kwargs):raise AssertionError('ZipFile allocation before preflight rejection')
+    monkeypatch.setattr('krits.formats.zipfile.ZipFile',forbidden)
+    with pytest.raises(KritsIntegrityError):await inspect_file(store,stored,limits=FileLimits(max_entries=1))
