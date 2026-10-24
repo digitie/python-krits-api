@@ -138,3 +138,24 @@ class FileAttachment:
     download_url: str
     size_bytes: int | None
     raw: dict[str, Any] = field(repr=False)
+
+
+@dataclass(frozen=True, slots=True)
+class NodeLinkRelease:
+    """자료실 게시 배포. 배포 ID와 실제 첨부 그룹 ID를 분리한다."""
+
+    release_id: str
+    attachment_group_id: str
+    description: str | None
+    data_file: FileAttachment | None
+    history_file: FileAttachment | None
+    raw: dict[str, Any] = field(repr=False)
+
+
+@dataclass(frozen=True, slots=True)
+class CatalogChanges:
+    """같은 조회 범위의 관찰 차이. missing은 삭제나 폐기를 뜻하지 않는다."""
+
+    added_ids: tuple[str, ...]
+    missing_ids: tuple[str, ...]
+    changed_ids: tuple[str, ...]

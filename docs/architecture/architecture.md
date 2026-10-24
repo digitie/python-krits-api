@@ -11,7 +11,7 @@ ITS 공개 자료실 ─ Chromium 발견 ─ 첨부 다운로드 ─ 형식/크�
 별도 계약이며 serviceKey/apiKey 설정을 만들지 않는다. 일반 HTTP 직접 호출로 대체하지 않는다.
 외부 앱이 자체 DB·수집 스케줄·장기 통계·제공 API를 담당한다.
 
-## 모듈과 공개 계약 (구현 예정)
+## 모듈과 공개 계약
 
 | 모듈 | 책임 | 의존 방향 |
 |---|---|---|
@@ -20,8 +20,9 @@ ITS 공개 자료실 ─ Chromium 발견 ─ 첨부 다운로드 ─ 형식/크�
 | `_ratelimit.py` | 한 루프의 공유 `AsyncTokenBucket` | asyncio/time |
 | `models.py` | frozen dataclass, 출처·수집 시각·범위·원시 필드 | 표준 라이브러리 |
 | `parse.py` | JSON/DOM 레코드의 엄격 검증·타입 변환 | models, exceptions |
-| `files.py` | 파일 목록·기간 검색·첨부 발견·다운로드 | browser, models, storage |
-| `storage.py` | 청크·해시·임시파일·원자적 manifest·재검증 | 표준 라이브러리 |
+| 파일 목록(`client.py/parse.py`) | 기간 검색·실제 DOM 첨부 발견·자료실 관찰 차이 | browser, models |
+| `files.py` (T007 예정) | bounded 첨부 다운로드 | browser, models, storage |
+| `storage.py` (T007 예정) | 청크·해시·임시파일·원자적 manifest·재검증 | 표준 라이브러리 |
 | `exceptions.py` | 접근·제한·네트워크·스키마·무결성 오류 | 표준 라이브러리 |
 
 클라이언트는 첫 operation에서 자원을 만들고 `async with`/`aclose()`로 닫는다.

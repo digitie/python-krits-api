@@ -91,6 +91,11 @@ live 테스트/조사 도구만 `KRITS_CHROMIUM_EXECUTABLE`을 선택적으로 �
 
 ## 개발 검증
 
+표준노드링크는 `await client.list_nodelink_releases(start_date=date(...), end_date=date(...))`로
+1년 이내 배포와 원본 ZIP·내역서 첨부를 발견한다. `compare_nodelink_catalogs(before, after)`로
+같은 기간의 관찰 차이를 계산한다. 배포 범위·첨부 없음·표시 MB 처리와 원본 보존 원칙은
+[자료실 사양](docs/nodelink-catalog.md)을 따른다.
+
 공개 일반 파일 목록은 `await client.list_data_files("event", start_date=date(...), end_date=date(...))`로
 조회한다(`traffic/event/vms`, 1년 이내). 정적 취약구간 CSV는
 `await client.list_data_files("weakSection")`로 발견한다. 날짜 인자는 `datetime.date`다.
