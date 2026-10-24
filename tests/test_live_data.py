@@ -36,7 +36,7 @@ async def test_live_road_catalog_and_traffic_both_directions(kind, direction):
         assert any(link.path for link in links)
         assert all(-180 <= lon <= 180 and -90 <= lat <= 90 for link in links for lon, lat in link.path)
         print(f"소통 live: {result.collected_at.isoformat()} {kind}/{road.road_id}/{direction}, "
-              f"도로 {len(roads.items)}, 구간 {len(result.items)}, 링크 {len(links)}")
+              f"도로 {len(roads.items)}, 구간 {len(result.items)}, 링크 {len(links)}, 경로 제공 {sum(bool(link.path) for link in links)}/{len(links)}")
 
 
 @pytest.mark.parametrize("kind", [None, "national"])
