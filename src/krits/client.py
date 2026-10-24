@@ -6,15 +6,18 @@ import asyncio
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timezone
+from functools import wraps
+from inspect import signature
 import re
-from typing import Literal
+from typing import Literal, ParamSpec, TypeVar, cast
 
 from playwright.async_api import BrowserContext, Error as PlaywrightError, Locator, Page, Request, Response
 
 from ._browser import BASE_URL, BrowserSession
+from ._cache import RequestCache
 from ._ratelimit import AsyncTokenBucket
 from .exceptions import (
-    KritsAccessError, KritsNetworkError, KritsProviderError, KritsRateLimitError, KritsSchemaError,
+    KritsAccessError, KritsClosedError, KritsNetworkError, KritsProviderError, KritsRateLimitError, KritsSchemaError,
 )
 from .models import Cctv, DataSnapshot, Detour, DetourRoad, FileAttachment, NodeLinkRelease, OpenDataService, PageSnapshot, Road, RoadEvent, RoadType, TrafficSection, TravelTime
 from .parse import (decode_json, parse_cctvs, parse_detour_roads, parse_detours, parse_events,
@@ -48,6 +51,38 @@ _ROADS_SCRIPT = """(elements) => elements.map(element => {
             road_number: title?.querySelector('span.road')?.textContent?.trim(),
             name: name?.textContent?.trim()};
 })"""
+P = ParamSpec("P")
+R = TypeVar("R")
+
+
+def _cached_query(function: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]:
+    """기본 인자까지 정규화해 같은 공개 조회만 공유한다."""
+    parameters = signature(function)
+
+    @wraps(function)
+    async def wrapped(*args: P.args, **kwargs: P.kwargs) -> R:
+        owner = cast("KritsClient", args[0])
+        owner._browser._bind_loop()
+        if owner._query_cache.closed or owner._browser._closed:
+            raise KritsClosedError("종료된 클라이언트입니다")
+        if owner._browser._denied_status is not None:
+            owner._query_cache.clear()
+        bound = parameters.bind(*args, **kwargs)
+        bound.apply_defaults()
+        key = (function.__name__, tuple((name, val) for name, val in bound.arguments.items() if name != "self"))
+        try:
+            hash(key)
+        except TypeError:
+            # 잘못된 비해시 인자도 원래 메서드의 사전 검증에서 처리한다.
+            return await function(*args, **kwargs)
+        try:
+            async with asyncio.timeout(owner._browser.timeout):
+                return await owner._query_cache.get(key, lambda: function(*args, **kwargs))
+        except TimeoutError:
+            owner._browser._raise_denial()
+            raise KritsNetworkError("공개 조회 시간 제한을 초과했습니다") from None
+
+    return wrapped
 
 
 def _check_status(status: int) -> None:
@@ -239,18 +274,21 @@ class KritsClient:
 
     ``browser_context``를 주입하면 해당 context는 호출자가 닫는다.
     라이브러리가 만든 page는 라이브러리가 닫는다. 기본 수집 operation은
-    1 RPS, burst=1, 자동 재시도 0이며 페이지 자산 전송 수의 제한은 아니다.
+    5 RPS, burst=1, 자동 재시도 0이다. 허용된 페이지 자산과 redirect 전송에도 적용한다.
     """
 
     def __init__(
         self,
         *,
-        timeout: float = 30.0,
-        max_rps: float = 1.0,
+        timeout: float = 90.0,
+        max_rps: float = 5.0,
         rate_limiter: AsyncTokenBucket | None = None,
         browser_context: BrowserContext | None = None,
         executable_path: str | None = None,
+        cache_ttl: float = 15.0,
+        cache_max_entries: int = 32,
     ) -> None:
+        self._query_cache = RequestCache(cache_ttl, cache_max_entries)
         self._browser = BrowserSession(
             timeout=timeout, max_rps=max_rps, rate_limiter=rate_limiter,
             browser_context=browser_context, executable_path=executable_path,
@@ -269,7 +307,15 @@ class KritsClient:
 
     async def aclose(self) -> None:
         """진행 중 요청 완료를 기다리고 소유 자원을 닫는다. 반복 호출은 안전하다."""
-        await self._browser.aclose()
+        self._browser._bind_loop()
+        try:
+            await self._query_cache.aclose()
+        finally:
+            await self._browser.aclose()
+
+    def clear_cache(self) -> None:
+        """완료된 조회 캐시를 비운다. 진행 중 같은 조회는 계속 공유한다."""
+        self._query_cache.clear()
 
     async def get_page_snapshot(self, page: PublicPage = "opendata") -> PageSnapshot:
         """허용된 공개 화면의 제목·출처·수집 시각을 조회한다.
@@ -283,6 +329,7 @@ class KritsClient:
             title = await _open_page(browser_page, page)
             return PageSnapshot(source_url=url, title=title, collected_at=datetime.now(timezone.utc))
 
+    @_cached_query
     async def list_roads(self, *, road_type: RoadType = "highway") -> DataSnapshot[Road]:
         """공개 교통 화면에 있는 도로 ID·노선번호·이름을 순서대로 조회한다."""
         _road_type(road_type)
@@ -292,6 +339,7 @@ class KritsClient:
             return DataSnapshot(parse_roads(rows, road_type), BASE_URL + _PATHS["traffic"],
                                 datetime.now(timezone.utc), {"road_type": road_type})
 
+    @_cached_query
     async def get_traffic(
         self, road_id: str, *, road_type: RoadType = "highway", direction: str | None = None,
     ) -> DataSnapshot[TrafficSection]:
@@ -323,6 +371,7 @@ class KritsClient:
             return DataSnapshot(parse_traffic(payload, road, selected), BASE_URL + _PATHS["traffic"],
                                 datetime.now(timezone.utc), {"road_type": road_type, "road_id": road_id, "direction": selected})
 
+    @_cached_query
     async def get_events(self, *, road_type: RoadType | None = None) -> DataSnapshot[RoadEvent]:
         """현재 공개 돌발 목록의 고속도로·국도 항목을 조회한다. 재난 분기는 포함하지 않는다."""
         if road_type is not None:
@@ -337,6 +386,7 @@ class KritsClient:
             return DataSnapshot(parse_events(payload, road_type), BASE_URL + _PATHS["outbreak"],
                                 datetime.now(timezone.utc), {"road_type": road_type or "all", "excluded": "DISASTER"})
 
+    @_cached_query
     async def search_cctvs(self, keyword: str) -> DataSnapshot[Cctv]:
         """CCTV명으로 메타데이터만 검색한다. 영상 재생/다운로드 요청은 하지 않는다."""
         if not isinstance(keyword, str) or not keyword.strip() or len(keyword) > 100:
@@ -350,6 +400,7 @@ class KritsClient:
             return DataSnapshot(parse_cctvs(payload), BASE_URL + _PATHS["cctv"],
                                 datetime.now(timezone.utc), {"keyword": keyword, "content": "metadata"})
 
+    @_cached_query
     async def list_detour_roads(self) -> DataSnapshot[DetourRoad]:
         """현재 고속도로 우회 화면의 노선번호 목록을 반환한다."""
         async with self._browser.operation() as page:
@@ -360,6 +411,7 @@ class KritsClient:
             return DataSnapshot(roads, BASE_URL + _PATHS["detour"], datetime.now(timezone.utc),
                                 {"road_type": "highway", "mode": "current"})
 
+    @_cached_query
     async def get_detours(self, road_number: str) -> DataSnapshot[Detour]:
         """현재 고속도로의 양방향 본선·우회 비교를 조회한다. road_number는 노선번호다."""
         if not isinstance(road_number, str) or re.fullmatch(r"[0-9]{1,4}", road_number) is None:
@@ -378,12 +430,14 @@ class KritsClient:
             return DataSnapshot(parse_detours(payload, road_number), BASE_URL + _PATHS["detour"],
                                 datetime.now(timezone.utc), {"road_type": "highway", "road_number": road_number, "mode": "current"})
 
+    @_cached_query
     async def list_travel_origins(self) -> DataSnapshot[str]:
         """소통 지도 기점 선택 위젯의 지원 도시를 반환한다."""
         async with self._browser.operation() as page:
             async with _travel_widget(page) as (_select, origins, _check):
                 return DataSnapshot(origins, BASE_URL + _PATHS["traffic"], datetime.now(timezone.utc), {"widget": "region_list"})
 
+    @_cached_query
     async def get_travel_times(self, origin: str) -> DataSnapshot[TravelTime]:
         """소통 지도 기점 위젯을 선택해 도시간 소요시간을 분 단위로 조회한다."""
         if not isinstance(origin, str) or not origin.strip() or len(origin) > 100:
@@ -402,6 +456,7 @@ class KritsClient:
                 return DataSnapshot(parse_travel_times(payload, origin), BASE_URL + _PATHS["traffic"],
                                     datetime.now(timezone.utc), {"origin": origin, "widget": "region_list"})
 
+    @_cached_query
     async def list_data_files(
         self, service: OpenDataService, *, start_date: date | None = None, end_date: date | None = None,
     ) -> DataSnapshot[FileAttachment]:
@@ -452,6 +507,7 @@ class KritsClient:
                 return DataSnapshot(parse_open_data(payload, service, links), url, datetime.now(timezone.utc),
                                     {"service": service, "start_date": start, "end_date": end, "kind": "date_range"})
 
+    @_cached_query
     async def list_nodelink_releases(self, *, start_date: date, end_date: date) -> DataSnapshot[NodeLinkRelease]:
         """1년 이내 자료실 배포와 원본 ZIP·내역서의 실제 첨부를 발견한다."""
         start, end = _date_range(start_date, end_date)

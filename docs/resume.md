@@ -1,13 +1,9 @@
-# Transport 지도용 T003 후속 — 검증 통과·머지 대기
-
-- `codex/traffic-link-geometry`는 최신 main085c329(T004~T006)을 통합하고 개별 TrafficLink.path의 EPSG:4326 좌표 계약을 추가한다.
-- 공개 polylineOl.js의 실제 LineString 변환과 경부선65구간/361링크의 path를 확인했다.
-- 현재 T004 이후 작업은 원래 체크아웃에서 계속하며 이 후속은 그 파일·진행 순서를 바꾸지 않는다.
-- offline157개·strict mypy·실제 Chromium live12개와 양방향 경로4표본, James/Popper 독립 리뷰와 b3af6bc CI6개가 통과했다. 설치본을 소비하는 Transport 실제 API/375·1440px 지도도 확인했다. PR4는 Draft이며 머지하지 않았다.
-- 최신 main 통합 최종 소스2e3555b는 offline279/99.52%·mypy7·CI6개·실제 Chromium35개·wheel 설치본을 통과했다.
-  최종 독립2리뷰의 잔여 P0/P1/P2는 없다. [증빙](validation/traffic-link-geometry.md)을 정산한 뒤 PR4 머지를 확인한다.
-
 # 재개 지점
+
+현재 단계는 T006A PR #8 서버부하 억제의 최종 리뷰/검증이다. T001–T006은 머지 완료다.
+별도 작업 PR #4의 개별 링크 EPSG:4326 경로 기능은 `65fdf78`로 머지됐고 T006A에
+`1915033`으로 통합했다. [해당 검증 이력](validation/traffic-link-geometry.md)은 보존한다.
+T006A 머지 확인 뒤 새 `origin/main`에서 T007을 시작하며, T008–T010까지 자율 진행한다.
 
 T001 PR #1(`1657e13`), T002 PR #2(`b11566e`), T003 PR #3(`61b357f`) 머지를 확인했다.
 T004 브랜치는 해당 `origin/main`에서 만들었다. CCTV 검색 메타데이터, 현재 고속도로 우회
@@ -23,8 +19,12 @@ DOM 교차 검증·날짜 경계·초기 요청 거부와 선택적 초기 요�
 해당 `origin/main`에서 T006 노드링크 자료실을 구현했다. 최신/역사 XLSX/부분배포/빈기간
 신규 live4개 통과. `docs/nodelink-catalog.md`의 실제 ID·번호·MB·범위 계약을 확인한다.
 T006 PR #7 최종 소스 `c8f1cb2`에서 두 독립 재리뷰, 오프라인268/99.51%, 전체live35,
-별도wheel설치본·소스CI6개 job 통과. 최종증빙CI·머지 확인 중이다.
+별도wheel설치본·최종증빙CI6개 job 통과 후 `085c329`로 머지했다.
 개발/테스트는 사용자가 허용한 Windows 네이티브로 계속한다. 인증 API를 호출하거나 키를 저장하지 않는다.
 사용자 추가 지시에 따라 다운로드 전 Opinet 기준 전송 예산·캐시·동일 요청 공유 하위 단계를 검증한다.
+`origin/main`에서 T006A를 구현 중이다. 실제 전송 단위 5RPS/burst1, 기본 TTL15초/32항목과
+동일 진행 조회 공유·취소 정리를 추가했다. 최종 통합 소스 `1915033`의 두 독립 리뷰,
+오프라인309/99.05%, 전체live43, 빌드와 원격CI6개job을 통과했다.
+검증 증빙 commit의 CI 확인 후 PR #8을 머지한다. 상세는 `validation/t006a.md`다.
 사용자는 T004–T010 완주를 자율 진행하도록 승인했다. 각 task의 게이트는 유지한다.
-API 키는 없으며 발급받는 작업을 제안하지 않는다. 구현 transport는 Chromium async다.
+provider는 API 키를 요구하거나 저장하지 않는다. 구현 transport는 Chromium async다.
