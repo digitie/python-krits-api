@@ -31,7 +31,7 @@ async def test_live_travel_times(origin):
         origins = await c.list_travel_origins()
         result = await c.get_travel_times(origin)
         async with c._browser.operation() as page:
-            await page.locator('.region_list li:not(:first)').first.wait_for(state='attached')
+            await page.locator('.region_list li:not(:first-child)').first.wait_for(state='attached')
             rendered = await page.locator('.region_list').inner_text()
     assert origin in origins.items and result.items and not result.complete
     for item in result.items:
