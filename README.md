@@ -91,6 +91,11 @@ live 테스트/조사 도구만 `KRITS_CHROMIUM_EXECUTABLE`을 선택적으로 �
 
 ## 개발 검증
 
+공개 일반 파일 목록은 `await client.list_data_files("event", start_date=date(...), end_date=date(...))`로
+조회한다(`traffic/event/vms`, 1년 이내). 정적 취약구간 CSV는
+`await client.list_data_files("weakSection")`로 발견한다. 날짜 인자는 `datetime.date`다.
+목록·DOM 대조와 다운로드 권한의 검증 범위는 [파일 발견 사양](docs/files-catalog.md)을 따른다.
+
 CCTV 메타데이터는 `await client.search_cctvs("서울")`, 현재 고속도로 우회는
 `await client.list_detour_roads()`에서 얻은 `road_number`로 `await client.get_detours("1")`,
 도시간은 `await client.list_travel_origins()`의 도시로 `await client.get_travel_times("대전")`을

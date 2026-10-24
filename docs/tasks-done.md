@@ -5,8 +5,11 @@
 | T001 | 12종 서비스·5종 파일 범위 조사, 구조·상세 사양·10단계 계획·검증 정책 | [#1](https://github.com/digitie/python-krits-api/pull/1) | [독립 리뷰 2건·Chromium live·CI](validation/t001.md) |
 | T002 | KRIC src 구조, native async Chromium·공유 버킷·생명주기·오류·CI·설치본 | [#2](https://github.com/digitie/python-krits-api/pull/2) | [독립 리뷰 2건·62 오프라인·3 live·wheel·CI](validation/t002.md) |
 | T003 | 도로 목록·양방향 소통 구간/개별 링크·현재 고속도로/국도 돌발, 엄격 파서와 조회 범위 | [#3](https://github.com/digitie/python-krits-api/pull/3) | [독립 리뷰 2건·146 오프라인·12 live·wheel·CI](validation/t003.md) |
+| T004 | CCTV 검색 메타데이터·현재 고속도로 우회 양방향·기점 위젯 도시간 소요시간 | [#5](https://github.com/digitie/python-krits-api/pull/5) | [독립 리뷰 2건·190 오프라인·22 live·wheel·CI](validation/t004.md) |
 
 PR 머지를 확인한 뒤 다음 task를 시작한다.
 
-T004는 PR #5의 최종 소스에서 독립 리뷰 2건·오프라인 190개·live 22개·설치본·CI를 통과했다.
-최종 증빙 commit의 CI와 PR 머지 확인 후 완료 표로 옮긴다. [증빙](validation/t004.md).
+T004 PR #5는 최종 증빙 head의 CI 6개 job 통과 후 `2de4dc6`으로 머지했다.
+
+T005 PR #6 소스 `a897c51`의 두 독립 리뷰·오프라인240·신규 live9·wheel설치본·소스CI를 통과했다.
+전체 live31개도 통과했다. 최종 증빙 head의 CI·머지 확인 후 완료 표로 옮긴다. [증빙](validation/t005.md).

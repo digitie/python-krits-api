@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from typing import Any, cast
+from urllib.parse import urlsplit
 
 from .exceptions import KritsSchemaError
-from .models import Cctv, Detour, DetourRoad, Road, RoadEvent, RoadType, TrafficLink, TrafficSection, TravelTime
+from .models import Cctv, Detour, DetourRoad, FileAttachment, Road, RoadEvent, RoadType, TrafficLink, TrafficSection, TravelTime
 
 
 def decode_json(text: str) -> object:
@@ -236,3 +238,67 @@ def parse_travel_times(value: object, origin: str) -> tuple[TravelTime, ...]:
                                  _text(item.get("ESPOTNM"), "ESPOTNM"),
                                  _number(item.get("REQRETIME"), "REQRETIME"), dict(item)))
     return tuple(result)
+
+
+def open_data_ids(value: object) -> tuple[str, ...]:
+    """DOM 갱신 대기에도 쓰는 파일 ID를 엄격하게 검증한다."""
+    ids = tuple(_text(_object(row, "파일 행").get("fileId"), "fileId")
+                for row in _list(_data(value).get("fileVOList"), "fileVOList"))
+    if len(set(ids)) != len(ids):
+        raise KritsSchemaError("파일 ID가 중복됐습니다")
+    return ids
+
+
+def _file_path(value: object, pattern: str) -> str:
+    path = _text(value, "첨부 href")
+    # 원문 DOM href만 허용하며 외부 origin·query·조각·인코딩된 경로 이탈을 거부한다.
+    if re.fullmatch(pattern, path) is None:
+        raise KritsSchemaError("공개 첨부 경로가 허용 계약과 다릅니다")
+    return "https://www.its.go.kr" + path
+
+
+def parse_open_data(value: object, service: str, links: object) -> tuple[FileAttachment, ...]:
+    """기간 응답과 실제 DOM 첨부를 ID·파일명·경로로 교차 검증한다."""
+    ids = open_data_ids(value)
+    rows = _list(_data(value).get("fileVOList"), "fileVOList")
+    anchors = _list(links, "첨부 DOM")
+    if len(anchors) != len(ids):
+        raise KritsSchemaError("파일 응답과 DOM 첨부 수가 다릅니다")
+    result = []
+    for row, anchor in zip(rows, anchors):
+        item = _object(row, "파일 행");link = _object(anchor, "첨부 DOM 행")
+        name = _text(item.get("fileStreNm"), "fileStreNm")
+        directory = _text(item.get("workingDirectory"), "workingDirectory")
+        if item.get("dataType") != service or link.get("id") != item["fileId"] or link.get("name") != name:
+            raise KritsSchemaError("파일 종류/ID/파일명이 DOM과 다릅니다")
+        url = _file_path(link.get("href"), r"/opendata/fileDownload/(traffic|event|vms)/[0-9]{4}/[A-Za-z0-9_-]+\.[A-Za-z0-9]+")
+        if urlsplit(url).path != f"/opendata/fileDownload/{service}/{directory}/{name}":
+            raise KritsSchemaError("파일 응답과 DOM 다운로드 경로가 다릅니다")
+        sequence = _count(item.get("fileSeq"), "fileSeq")
+        result.append(FileAttachment(service, item["fileId"], str(sequence), name, url,
+                                     _count(item.get("fileSize"), "fileSize"), dict(item)))
+    return tuple(result)
+
+
+def parse_weak_files(value: object) -> tuple[FileAttachment, ...]:
+    """정적 취약구간 CSV의 이름 있는 링크와 중복 아이콘 링크를 병합한다."""
+    rows = _list(value, "취약구간 DOM")
+    if not rows:
+        raise KritsSchemaError("취약구간 파일 DOM이 비어 있습니다")
+    result: dict[str, FileAttachment] = {}
+    all_urls = set()
+    for row in rows:
+        item = _object(row, "취약구간 첨부")
+        url = _file_path(item.get("href"), r"/file/opendata/weakSections/[A-Za-z0-9_-]+\.csv")
+        all_urls.add(url)
+        name = item.get("name")
+        if not isinstance(name, str):
+            raise KritsSchemaError("취약구간 파일명이 문자열이 아닙니다")
+        if not name.strip():
+            continue
+        if url in result and result[url].name != name.strip():
+            raise KritsSchemaError("같은 취약구간 경로의 파일명이 서로 다릅니다")
+        result[url] = FileAttachment("weakSection", None, None, name.strip(), url, None, dict(item))
+    if set(result) != all_urls:
+        raise KritsSchemaError("이름 없는 취약구간 첨부만 있습니다")
+    return tuple(result.values())

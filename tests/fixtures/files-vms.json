@@ -1,0 +1,51 @@
+{
+  "header": {
+    "result": "정상 처리되었습니다.",
+    "state": "OK"
+  },
+  "body": {
+    "dataLen": 1,
+    "data": {
+      "fileVOList": [
+        {
+          "fileId": "vms_1953233413",
+          "fileSeq": 0,
+          "fileStreCoursNm": null,
+          "fileStreNm": "20261023.zip",
+          "fileOrgStreNm": null,
+          "fileExtsnNm": null,
+          "fileContent": null,
+          "fileMg": 0,
+          "fileSize": 27284750,
+          "workingDirectory": "2026",
+          "dwldDt": null,
+          "openDataId": null,
+          "conectMberTy": 0,
+          "mberId": null,
+          "fileDate": 0,
+          "fileStrDate": "1792778610172",
+          "dataType": "vms"
+        },
+        {
+          "fileId": "vms_1954139522",
+          "fileSeq": 0,
+          "fileStreCoursNm": null,
+          "fileStreNm": "20261022.zip",
+          "fileOrgStreNm": null,
+          "fileExtsnNm": null,
+          "fileContent": null,
+          "fileMg": 0,
+          "fileSize": 27044191,
+          "workingDirectory": "2026",
+          "dwldDt": null,
+          "openDataId": null,
+          "conectMberTy": 0,
+          "mberId": null,
+          "fileDate": 0,
+          "fileStrDate": "1792692165652",
+          "dataType": "vms"
+        }
+      ]
+    }
+  }
+}

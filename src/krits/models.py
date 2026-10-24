@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Any, Generic, Literal, TypeVar
 
 RoadType = Literal["highway", "national"]
+OpenDataService = Literal["traffic", "event", "vms", "weakSection"]
 T = TypeVar("T")
 
 
@@ -123,4 +124,17 @@ class TravelTime:
     origin: str
     destination: str
     minutes: float
+    raw: dict[str, Any] = field(repr=False)
+
+
+@dataclass(frozen=True, slots=True)
+class FileAttachment:
+    """공개 첨부 발견 결과. DOM에 없는 식별자/바이트 수는 None이며 다운로드 완료가 아니다."""
+
+    service: str
+    file_id: str | None
+    attachment_id: str | None
+    name: str
+    download_url: str
+    size_bytes: int | None
     raw: dict[str, Any] = field(repr=False)
