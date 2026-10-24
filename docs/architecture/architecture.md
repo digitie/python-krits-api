@@ -28,6 +28,12 @@ ITS 공개 자료실 ─ Chromium 발견 ─ 첨부 다운로드 ─ 형식/크�
 외부 context 주입 시 소유권을 명시하고 호출자의 자원을 닫지 않는다. 종료 후 재사용은 거부한다.
 같은 page에 동시에 navigation하지 않도록 operation 단위 lock을 사용한다.
 timeout, 취소, 초기화 중 실패에도 소유 자원을 회수한다.
+Chromium CDP Fetch의 request 단계에서 소유 page의 각 요청과 redirect hop을 검사한다.
+단순 `page.route().continue_()`는 redirect 다음 전송에서 다시 호출되지 않아 이 경계로 쓰지 않는다.
+CDP handler와 session은 page 종료와 함께 해제하며 주입 context의 다른 page는 건드리지 않는다.
+lock·버킷 대기는 operation timeout에 포함하고, 자원을 아직 사용하지 않은 대기자의 timeout이
+진행 중인 다른 operation의 page를 닫지 않도록 한다. 자원 생성 도중 취소 시 생성 결과를
+받아 cleanup에 등록한 후 취소를 전파한다.
 
 기본 수집 operation은 1 RPS, burst capacity=1, 자동 재시도 0이다. 공유 버킷을 주입할 수 있다.
 이 제한은 명시적 수집 operation의 예산이며 브라우저가 로드하는 모든 자산의 초당 전송 수를

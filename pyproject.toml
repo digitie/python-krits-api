@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "python-krits-api"
+version = "0.1.0"
+description = "ITS 공개 웹 교통정보와 표준노드링크 파일의 키 없는 비동기 수집"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE", "NOTICE"]
+dependencies = ["playwright>=1.51,<2"]
+
+[project.optional-dependencies]
+dev = ["build", "mypy>=1.10", "pytest>=8", "pytest-asyncio>=0.24", "pytest-cov"]
+
+[project.urls]
+Repository = "https://github.com/digitie/python-krits-api"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["krits*"]
+
+[tool.setuptools.package-data]
+krits = ["py.typed"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-ra"
+markers = ["live: 키 없이 실제 Chromium과 ITS 공개 사이트를 사용하는 opt-in 테스트"]
