@@ -9,7 +9,7 @@ from typing import Any, cast
 from urllib.parse import urlsplit
 
 from .exceptions import KritsSchemaError
-from .models import Cctv, Detour, DetourRoad, FileAttachment, Road, RoadEvent, RoadType, TrafficLink, TrafficSection, TravelTime
+from .models import CatalogChanges, Cctv, DataSnapshot, Detour, DetourRoad, FileAttachment, NodeLinkRelease, Road, RoadEvent, RoadType, TrafficLink, TrafficSection, TravelTime
 
 
 def decode_json(text: str) -> object:
@@ -302,3 +302,93 @@ def parse_weak_files(value: object) -> tuple[FileAttachment, ...]:
     if set(result) != all_urls:
         raise KritsSchemaError("이름 없는 취약구간 첨부만 있습니다")
     return tuple(result.values())
+
+
+def _node_rows(value: object) -> list[dict[str, Any]]:
+    rows = [_object(row, "노드링크 배포") for row in _list(_data(value).get("fileVOList"), "fileVOList")]
+    for key in ("seq", "atchFileId"):
+        ids = [_text(row.get(key), key) for row in rows]
+        if len(ids) != len(set(ids)):
+            raise KritsSchemaError(f"노드링크 {key}가 중복됐습니다")
+    return rows
+
+
+def _node_parts(row: dict[str, Any]) -> list[tuple[str, str, str]]:
+    parts = []
+    for prefix in ("node", "hist"):
+        keys = (prefix + "OrginlFileNm", prefix + "FileExtsnNm", prefix + "FileSeq", prefix + "FileMg")
+        if any(key not in row for key in keys):
+            raise KritsSchemaError("노드링크 첨부 필드가 누락됐습니다")
+        stem = _optional_text(row[keys[0]], keys[0])
+        if stem is None:
+            if row[keys[3]] is not None:
+                _number(row[keys[3]], keys[3])
+            if row[keys[1]] is not None or row[keys[2]] is not None or row[keys[3]] not in (None, 0):
+                raise KritsSchemaError("없는 노드링크 첨부의 메타데이터가 남아 있습니다")
+            continue
+        ext = _text(row[keys[1]], keys[1]);seq = _text(row[keys[2]], keys[2])
+        if re.fullmatch(r"[A-Za-z0-9]+", ext) is None or re.fullmatch(r"[0-9]+", seq) is None:
+            raise KritsSchemaError("노드링크 첨부 확장자/번호 형식이 다릅니다")
+        if row[keys[3]] is not None:
+            _number(row[keys[3]], keys[3])
+        parts.append((prefix, seq, stem + "." + ext))
+    if not parts or len({seq for _prefix, seq, _name in parts}) != len(parts):
+        raise KritsSchemaError("노드링크 배포에 첨부가 없거나 번호가 충돌합니다")
+    return parts
+
+
+def nodelink_dom_ids(value: object) -> tuple[str, ...]:
+    """자료실 DOM 첨부 ID의 기대 순서를 응답의 실제 첨부 그룹에서 읽는다."""
+    return tuple(("NODE_" if prefix == "node" else "HIST_") + row["atchFileId"]
+                 for row in _node_rows(value) for prefix, _seq, _name in _node_parts(row))
+
+
+def parse_nodelink_releases(value: object, links: object) -> tuple[NodeLinkRelease, ...]:
+    """명시적 null 첨부와 누락 필드를 구분하고 실제 ID/번호/파일명/DOM 경로를 검증한다."""
+    anchors = _list(links, "노드링크 첨부 DOM")
+    expected_ids = nodelink_dom_ids(value)
+    if len(anchors) != len(expected_ids):
+        raise KritsSchemaError("노드링크 응답과 DOM 첨부 수가 다릅니다")
+    offset = 0
+    result = []
+    for row in _node_rows(value):
+        files: dict[str, FileAttachment] = {}
+        group = row["atchFileId"]
+        for prefix, sequence, name in _node_parts(row):
+            anchor = _object(anchors[offset], "노드링크 첨부")
+            if anchor.get("id") != expected_ids[offset] or anchor.get("sequence") != sequence or anchor.get("name") != name:
+                raise KritsSchemaError("노드링크 응답과 DOM ID/첨부번호/파일명이 다릅니다")
+            url = _file_path(anchor.get("href"), r"/opendata/nodelinkFileSDownload/[A-Za-z0-9_-]+/[0-9]+")
+            if urlsplit(url).path != f"/opendata/nodelinkFileSDownload/{group}/{sequence}":
+                raise KritsSchemaError("노드링크 DOM과 실제 첨부 ID/번호가 다릅니다")
+            # FileMg는 표시용 반올림 MB다. 정확한 바이트 수를 만들어내지 않는다.
+            files[prefix] = FileAttachment("nodelink", group, sequence, name, url, None,
+                                           {**row, "role": prefix})
+            offset += 1
+        result.append(NodeLinkRelease(row["seq"], group, _optional_text(row.get("updtCn"), "updtCn"),
+                                      files.get("node"), files.get("hist"), dict(row)))
+    return tuple(result)
+
+
+def compare_nodelink_catalogs(
+    before: DataSnapshot[NodeLinkRelease], after: DataSnapshot[NodeLinkRelease],
+) -> CatalogChanges:
+    """같은 자료실·기간의 추가/미관찰/메타데이터 변경을 계산한다. 원본은 삭제하지 않는다."""
+    if before.scope != after.scope or before.source_url != after.source_url:
+        raise ValueError("같은 출처와 조회 범위의 자료실 목록만 비교할 수 있습니다")
+    old = {row.release_id: row for row in before.items}
+    new = {row.release_id: row for row in after.items}
+    if len(old) != len(before.items) or len(new) != len(after.items):
+        raise KritsSchemaError("비교 목록의 배포 ID가 중복됐습니다")
+
+    def metadata(row: NodeLinkRelease) -> tuple[object, ...]:
+        # rowSeq는 현재 목록의 순번이므로 앞에 새 배포가 추가돼도 변경으로 세지 않는다.
+        files = tuple(None if file is None else (file.service, file.file_id, file.attachment_id,
+                                                 file.name, file.download_url, file.size_bytes)
+                      for file in (row.data_file, row.history_file))
+        return (row.attachment_group_id, row.description, files,
+                {key: val for key, val in row.raw.items() if key != "rowSeq"})
+
+    return CatalogChanges(tuple(key for key in new if key not in old),
+                          tuple(key for key in old if key not in new),
+                          tuple(key for key in new if key in old and metadata(old[key]) != metadata(new[key])))

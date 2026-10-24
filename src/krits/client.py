@@ -16,9 +16,9 @@ from ._ratelimit import AsyncTokenBucket
 from .exceptions import (
     KritsAccessError, KritsNetworkError, KritsProviderError, KritsRateLimitError, KritsSchemaError,
 )
-from .models import Cctv, DataSnapshot, Detour, DetourRoad, FileAttachment, OpenDataService, PageSnapshot, Road, RoadEvent, RoadType, TrafficSection, TravelTime
+from .models import Cctv, DataSnapshot, Detour, DetourRoad, FileAttachment, NodeLinkRelease, OpenDataService, PageSnapshot, Road, RoadEvent, RoadType, TrafficSection, TravelTime
 from .parse import (decode_json, parse_cctvs, parse_detour_roads, parse_detours, parse_events,
-                    open_data_ids, parse_open_data, parse_origins, parse_roads, parse_traffic,
+                    nodelink_dom_ids, open_data_ids, parse_nodelink_releases, parse_open_data, parse_origins, parse_roads, parse_traffic,
                     parse_travel_times, parse_weak_files)
 
 PublicPage = Literal["opendata", "traffic", "outbreak", "cctv", "detour", "travel_time", "nodelink"]
@@ -156,7 +156,9 @@ async def _response_json(response: Response, url: str) -> object:
     return payload
 
 
-async def _open_file_catalog(page: Page, url: str, endpoint: str) -> None:
+async def _open_file_catalog(
+    page: Page, url: str, endpoint: str, validate: Callable[[object], object] = open_data_ids,
+) -> None:
     """초기 목록 요청은 선택적이다. 발생한 응답은 조회 버튼을 누르기 전에 검사한다."""
     responses: list[Response] = []
 
@@ -169,7 +171,7 @@ async def _open_file_catalog(page: Page, url: str, endpoint: str) -> None:
         await _visit_page(page, url, "#moveData")
         await page.wait_for_load_state("networkidle")
         for response in responses:
-            open_data_ids(await _response_json(response, BASE_URL + endpoint))
+            validate(await _response_json(response, BASE_URL + endpoint))
     finally:
         page.remove_listener("response", observe)
 
@@ -449,3 +451,34 @@ class KritsClient:
                     "es => es.map(e => ({id:e.id,name:e.title,href:e.getAttribute('href')}))")
                 return DataSnapshot(parse_open_data(payload, service, links), url, datetime.now(timezone.utc),
                                     {"service": service, "start_date": start, "end_date": end, "kind": "date_range"})
+
+    async def list_nodelink_releases(self, *, start_date: date, end_date: date) -> DataSnapshot[NodeLinkRelease]:
+        """1년 이내 자료실 배포와 원본 ZIP·내역서의 실제 첨부를 발견한다."""
+        start, end = _date_range(start_date, end_date)
+        url = BASE_URL + _PATHS["nodelink"]
+        endpoint = "/opendata/getNodeLinkDataFileList"
+        async with self._browser.operation() as page:
+            await page.goto("about:blank")
+            async with _denial_guard(page, endpoint) as check:
+                await _open_file_catalog(page, url, endpoint, nodelink_dom_ids)
+                check()
+                await page.locator("#inp_trafficDate").fill(start.replace("-", "."))
+                await page.locator("#inp_trafficDate_endDate").fill(end.replace("-", "."))
+
+                async def search() -> None:
+                    check()
+                    await page.locator("input[onclick='pages.getDataFile(this)'][data-code='-1']").click()
+
+                payload = await _action_json(page, endpoint, search,
+                                             {"workingDirectory": "/nodeLink", "searchType": -1, "startDate": start, "endDate": end})
+                ids = nodelink_dom_ids(payload)
+                await page.wait_for_function("""ids => {
+                    const links = [...document.querySelectorAll('#data_file_list_result a.down')];
+                    return links.length === ids.length && links.every((e,i) => e.id === ids[i]);
+                }""", arg=list(ids))
+                links = await page.locator("#data_file_list_result a.down").evaluate_all("""es => es.map(e => {
+                    const copy = e.cloneNode(true); copy.querySelectorAll('span').forEach(s => s.remove());
+                    return {id:e.id,sequence:e.title,name:copy.textContent.trim(),href:e.getAttribute('href')};
+                })""")
+                return DataSnapshot(parse_nodelink_releases(payload, links), url, datetime.now(timezone.utc),
+                                    {"service": "nodelink", "start_date": start, "end_date": end})

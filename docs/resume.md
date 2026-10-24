@@ -10,6 +10,9 @@ T004 PR #5 최종 소스 `8963485`에서 두 독립 리뷰, 오프라인190/99.1
 해당 `origin/main`에서 T005 일반 파일 발견을 구현했다. `list_data_files`의 기간 ZIP/정적CSV,
 DOM 교차 검증·날짜 경계·초기 요청 거부와 선택적 초기 요청을 검증 중이다.
 상세는 `docs/files-catalog.md`. T005 PR #6 소스 `a897c51`에서 두 독립 리뷰, 오프라인240/99.45%,
-신규live9·전체live31, 별도wheel설치본·소스CI6개job을 통과했다. 최종증빙CI·머지 확인 중이다.
+신규live9·전체live31, 별도wheel설치본·최종증빙CI6개job을 통과하고 `4ece092`로 머지했다.
+해당 `origin/main`에서 T006 노드링크 자료실을 구현했다. 최신/역사 XLSX/부분배포/빈기간
+신규 live4개 통과. `docs/nodelink-catalog.md`의 실제 ID·번호·MB·범위 계약을 확인한다.
+T006 두 독립 리뷰·전체live·최종CI·머지 전이다. 개발/테스트는 사용자가 허용한 Windows 네이티브로 계속한다.
 사용자는 T004–T010 완주를 자율 진행하도록 승인했다. 각 task의 게이트는 유지한다.
 API 키는 없으며 발급받는 작업을 제안하지 않는다. 구현 transport는 Chromium async다.
