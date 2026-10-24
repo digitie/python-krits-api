@@ -9,6 +9,11 @@
 
 # 작업 기록
 
+- T010 최종1dac9f7: 두 독립 리뷰 통과, offline498/97.05%·별도sdist498·CI6개job 성공.
+  전체live64(2581b24)와 최종전체ZIP재검사1·별도wheel전체공개기능/내역서/ZIP재사용이 통과했다.
+  전체ZIP271,402,628bytes/11항목/CRC/prj2개, 실제대용량전송1회·재실행0회다.
+  `validation/t010.md`에 SHA·시각·범위·리뷰P2수정과설치본결과를기록했다. 증빙CI확인후PR #12를머지한다.
+
 - T009 증빙 head84ba1da CI6개job 성공 후 PR #11을 c22fa34로 머지했다.
   해당 origin/main에서 codex/t010-integration을 만들었다. 별도 wheel 통합과 전체 ZIP opt-in을 검증한다.
 
