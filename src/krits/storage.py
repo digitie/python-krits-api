@@ -42,6 +42,19 @@ def _digest(path: Path) -> tuple[str, int]:
     return digest.hexdigest(), size
 
 
+def _windows_comparison_name(value: str) -> str:
+    """resolve 중 경로가 생성될 때 남을 수 있는 동등한 Windows 접두사를 맞춘다."""
+    if value.startswith("\\\\?\\UNC\\"):
+        return "\\\\" + value[8:]
+    if value.startswith("\\\\?\\") and re.match(r"[A-Za-z]:\\", value[4:]):
+        return value[4:]
+    return value
+
+
+def _comparison_path(path: Path) -> Path:
+    return Path(_windows_comparison_name(str(path))) if os.name == "nt" else path
+
+
 class FileStore:
     """명시한 로컬 root의 원본/manifest 관리. 생성자는 파일·네트워크 I/O를 하지 않는다."""
 
@@ -56,7 +69,7 @@ class FileStore:
                 break
             if candidate.is_symlink():
                 raise KritsIntegrityError("보관 경로에 심볼릭 링크가 있습니다")
-        if not path.resolve().is_relative_to(root):
+        if not _comparison_path(path.resolve()).is_relative_to(_comparison_path(root)):
             raise KritsIntegrityError("보관 경로가 root를 벗어났습니다")
         if mkdir:
             path.mkdir(parents=True, exist_ok=True)

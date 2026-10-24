@@ -11,6 +11,7 @@
 | T003M | 별도 작업의 개별 링크 EPSG:4326 경로, 원격 main `65fdf78` 머지 확인 | [#4](https://github.com/digitie/python-krits-api/pull/4) | [별도 작업 검증 기록](validation/traffic-link-geometry.md) |
 | T006A | Opinet 기준 실제 전송 예산·TTL/LRU·동일 조회 공유·취소 정리 | [#8](https://github.com/digitie/python-krits-api/pull/8) | [독립 리뷰2건·309 오프라인·43 live·CI](validation/t006a.md) |
 | T007 | Chromium 청크 전송·해시 원본·불변 manifest·마지막 관찰·재검증/재사용 | [#9](https://github.com/digitie/python-krits-api/pull/9) | [독립 리뷰2건·382 오프라인·55 live·설치본·CI](validation/t007.md) |
+| T008 | ZIP/CSV/XLSX 경계·CRC·원문/검사 보고서·명시적 S3 GET 해시 | [#10](https://github.com/digitie/python-krits-api/pull/10) | [독립 리뷰2건·471 오프라인·58 live·설치본·CI](validation/t008.md) |
 
 PR 머지를 확인한 뒤 다음 task를 시작한다.
 

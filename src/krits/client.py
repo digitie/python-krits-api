@@ -21,8 +21,9 @@ from .storage import FileStore
 from .exceptions import (
     KritsAccessError, KritsClosedError, KritsNetworkError, KritsProviderError, KritsRateLimitError, KritsSchemaError,
 )
-from .models import Cctv, DataSnapshot, Detour, DetourRoad, FileAttachment, NodeLinkRelease, OpenDataService, PageSnapshot, Road, RoadEvent, RoadType, StoredFile, TrafficSection, TravelTime
+from .models import Cctv, DataSnapshot, Detour, DetourRoad, DisasterZone, FileAttachment, NodeLinkRelease, OpenDataService, PageSnapshot, Road, RoadEvent, RoadType, StoredFile, TrafficSection, TravelTime, Vms
 from .parse import (decode_json, parse_cctvs, parse_detour_roads, parse_detours, parse_events,
+                    parse_vms, parse_disaster_zones,
                     nodelink_dom_ids, open_data_ids, parse_nodelink_releases, parse_open_data, parse_origins, parse_roads, parse_traffic,
                     parse_travel_times, parse_weak_files)
 
@@ -209,6 +210,41 @@ async def _open_file_catalog(
         await page.wait_for_load_state("networkidle")
         for response in responses:
             validate(await _response_json(response, BASE_URL + endpoint))
+    finally:
+        page.remove_listener("response", observe)
+
+
+async def _vms_payload(page: Page) -> object:
+    """기존 화면 설정의 자동 VMS 응답을 재사용하고 없을 때만 버튼을 누른다."""
+    responses: list[tuple[Response, object]] = []
+
+    def observe(response: Response) -> None:
+        if response.url != BASE_URL + "/map/getMarkers" or response.request.method != "POST":
+            return
+        try:
+            data = response.request.post_data_json
+            if isinstance(data, dict):
+                query = data.get("body", {}).get("data", {})
+                if query.get("type") == "VMS":
+                    responses.append((response, query.get("keyword")))
+        except (ValueError, TypeError, AttributeError, PlaywrightError):
+            return
+
+    page.on("response", observe)
+    try:
+        await _open_page(page, "traffic")
+        await page.wait_for_load_state("networkidle")
+        payload: object = None
+        for response, keyword in responses:
+            if keyword != "":
+                raise KritsSchemaError("초기 VMS 응답의 검색 조건이 전체 조회와 다릅니다")
+            payload = await _response_json(response, BASE_URL + "/map/getMarkers")
+            parse_vms(payload)
+        if responses:
+            return payload
+        await page.locator(".map_detail .title_box button.open").click()
+        return await _action_json(page, "/map/getMarkers", page.locator("#btn_vms:visible").click,
+                                  {"type": "VMS", "keyword": ""})
     finally:
         page.remove_listener("response", observe)
 
@@ -419,6 +455,28 @@ class KritsClient:
             )
             return DataSnapshot(parse_events(payload, road_type), BASE_URL + _PATHS["outbreak"],
                                 datetime.now(timezone.utc), {"road_type": road_type or "all", "excluded": "DISASTER"})
+
+    @_cached_query
+    async def get_vms(self) -> DataSnapshot[Vms]:
+        """지도 세부사항의 VMS 버튼으로 현재 표출 원문을 조회한다."""
+        async with self._browser.operation() as page:
+            await page.goto("about:blank")
+            async with _denial_guard(page, "/map/getMarkers") as check:
+                payload = await _vms_payload(page)
+                check()
+                return DataSnapshot(parse_vms(payload), BASE_URL + _PATHS["traffic"],
+                                    datetime.now(timezone.utc), {"layer": "VMS", "time": "current"})
+
+    @_cached_query
+    async def get_disaster_zones(self) -> DataSnapshot[DisasterZone]:
+        """현재 DISASTER 구역만 조회한다. 과거 조회나 도로 돌발 재분류는 하지 않는다."""
+        async with self._browser.operation() as page:
+            await page.goto("about:blank")
+            payload = await _action_json(page, "/map/getMarkers", lambda: _open_page(page, "outbreak"),
+                                         {"type": "", "id": None, "drct": None, "keyword": ""})
+            return DataSnapshot(parse_disaster_zones(payload), BASE_URL + _PATHS["outbreak"],
+                                datetime.now(timezone.utc), {"group": "DISASTER", "time": "current", "excluded": "HIGHWAY,NATIONAL"},
+                                completeness_note="현재 DISASTER 분기의 구역이며 고속도로·국도 재난성 돌발과 과거 재난 이력을 포함하지 않습니다.")
 
     @_cached_query
     async def search_cctvs(self, keyword: str) -> DataSnapshot[Cctv]:

@@ -55,7 +55,8 @@ async def test_live_events_have_real_ids_scope_and_optional_messages(kind):
 
 
 @pytest.mark.parametrize("status", [401, 403, 429])
-async def test_initial_event_denial_stops_without_refresh_in_real_chromium(monkeypatch, status):
+@pytest.mark.parametrize("method", ["get_events", "get_disaster_zones"])
+async def test_initial_event_denial_stops_without_refresh_in_real_chromium(monkeypatch, status, method):
     """초기 요청 거부 후 200을 주는 refresh 버튼이 있어도 추가 호출하지 않는다."""
     observed = []
     valid = (Path(__file__).parent / "fixtures" / "events.json").read_bytes()
@@ -98,7 +99,7 @@ async def test_initial_event_denial_stops_without_refresh_in_real_chromium(monke
     try:
         async with KritsClient(executable_path=os.getenv("KRITS_CHROMIUM_EXECUTABLE"), timeout=15) as client:
             with pytest.raises(error):
-                await client.get_events()
+                await getattr(client, method)()
         assert observed == [status]
     finally:
         await asyncio.to_thread(server.shutdown)

@@ -97,6 +97,11 @@ live 테스트/조사 도구만 `KRITS_CHROMIUM_EXECUTABLE`을 선택적으로 �
 
 ## 개발 검증
 
+현재 VMS 표출 원문은 `await client.get_vms()`, 현재 재난구역은
+`await client.get_disaster_zones()`로 조회한다. 공식 12종의 지원·미지원과 한계는
+`from krits import list_capabilities` 및 [대응표](docs/remaining-services.md)를 확인한다.
+예측·VDS·주의운전·VSL·위험물 전용 기능은 공개 웹 계약을 확인하지 못해 미지원이다.
+
 표준노드링크는 `await client.list_nodelink_releases(start_date=date(...), end_date=date(...))`로
 1년 이내 배포와 원본 ZIP·내역서 첨부를 발견한다. `compare_nodelink_catalogs(before, after)`로
 같은 기간의 관찰 차이를 계산한다. 배포 범위·첨부 없음·표시 MB 처리와 원본 보존 원칙은

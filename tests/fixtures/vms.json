@@ -1,0 +1,38 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry_name": "GEOMETRY",
+      "id": "0010VME00200",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          129.061944,
+          35.317778
+        ]
+      },
+      "properties": {
+        "INFO": "{\"idx\":1,\"rnum\":0,\"roadInsttCode\":\"46170301\",\"vmsId\":\"0010VME00200\",\"vmsMssageNo\":null,\"recptnDt\":null,\"vmsTy\":null,\"vmsMssageTy\":null,\"vmsEprssDt\":null,\"vmsEprssCn\":\" 전방 갓길차단중 (~10월30일)\",\"drcTy\":\"E\",\"drcNm\":\"종점\",\"eprssLv\":\"13\",\"routeNo\":\"1\",\"routeNm\":\"경부고속도로\",\"x\":129.061944,\"y\":35.317778,\"roadGrad\":null}",
+        "type": "VMS"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry_name": "GEOMETRY",
+      "id": "0010VME00300",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          129.04327,
+          35.34392
+        ]
+      },
+      "properties": {
+        "INFO": "{\"idx\":2,\"rnum\":0,\"roadInsttCode\":\"46170301\",\"vmsId\":\"0010VME00300\",\"vmsMssageNo\":null,\"recptnDt\":null,\"vmsTy\":null,\"vmsMssageTy\":null,\"vmsEprssDt\":null,\"vmsEprssCn\":\" 빗길 \\\"미끄럼\\\" 감속운행@@@ 안전띠 착용은 운전자의 의무입니다\",\"drcTy\":\"E\",\"drcNm\":\"종점\",\"eprssLv\":null,\"routeNo\":\"1\",\"routeNm\":\"경부고속도로\",\"x\":129.04327,\"y\":35.34392,\"roadGrad\":null}",
+        "type": "VMS"
+      }
+    }
+  ],
+  "totalFeatures": 2
+}
