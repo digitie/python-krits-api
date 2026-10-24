@@ -1,0 +1,19 @@
+python-krits-api
+
+프로젝트 구조·문서 라우팅·검증 절차:
+  digitie/python-kric-api, commit 55361313ad59f13e8699ebcbe130c532002b9b76
+  https://github.com/digitie/python-kric-api
+  GPL-3.0-or-later
+
+src/krits/_ratelimit.py는 다음 파일을 복사했다:
+  digitie/python-opinet-api, src/opinet/_ratelimit.py
+  commit dcfb41a1862bb9718a778fdc0fc2e3e807ed7d47
+  https://github.com/digitie/python-opinet-api
+  GPL-3.0-or-later
+
+비동기 파일 처리·취소 안전·체크섬 설계 참고 (현재 복사한 코드 없음):
+  digitie/python-mois-api, commit 3cdee09eb753edbdaf91c28a955e2c6ddd72ec17
+  https://github.com/digitie/python-mois-api
+  MIT
+
+프로젝트 라이선스 전문은 LICENSE에 있다.
