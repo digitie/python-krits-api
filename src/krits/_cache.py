@@ -55,7 +55,7 @@ class RequestCache:
         self.closed = False
         self._entries: OrderedDict[Hashable, tuple[float, object]] = OrderedDict()
         self._flights: dict[Hashable, _Flight] = {}
-        self._retiring: dict[Hashable, asyncio.Task[object]] = {}
+        self._retiring: dict[Hashable, set[asyncio.Task[object]]] = {}
         self._tasks: set[asyncio.Task[object]] = set()
         self._generation = 0
 
@@ -76,12 +76,12 @@ class RequestCache:
         flight = self._flights.get(key)
         if flight is None:
             generation = self._generation
-            retiring = self._retiring.get(key)
+            retiring = tuple(self._retiring.get(key, ()))
 
             async def produce() -> object:
-                if retiring is not None:
+                for previous in retiring:
                     try:
-                        await asyncio.shield(retiring)
+                        await asyncio.shield(previous)
                     except asyncio.CancelledError:
                         current = asyncio.current_task()
                         if current is not None and current.cancelling():
@@ -104,8 +104,11 @@ class RequestCache:
             def done(task: asyncio.Task[object]) -> None:
                 if self._flights.get(key) is flight:
                     del self._flights[key]
-                if self._retiring.get(key) is task:
-                    del self._retiring[key]
+                retiring_tasks = self._retiring.get(key)
+                if retiring_tasks is not None:
+                    retiring_tasks.discard(task)
+                    if not retiring_tasks:
+                        del self._retiring[key]
                 self._tasks.discard(task)
                 if not task.cancelled():
                     task.exception()
@@ -119,7 +122,7 @@ class RequestCache:
             if flight.waiters == 0 and not flight.task.done():
                 if self._flights.get(key) is flight:
                     del self._flights[key]
-                self._retiring[key] = flight.task
+                self._retiring.setdefault(key, set()).add(flight.task)
                 flight.task.cancel()
                 await _settle(flight.task)
 

@@ -209,3 +209,24 @@ async def test_fresh_waiter_can_timeout_during_previous_cleanup(browser):
         release.set()
         with pytest.raises(asyncio.CancelledError):await first
         await c.aclose()
+
+
+async def test_third_caller_preserves_original_cleanup_after_replacement_cancel():
+    cache=RequestCache(15,2);started=asyncio.Event();cleaning=asyncio.Event();release=asyncio.Event();calls=0
+    async def fetch():
+        nonlocal calls
+        calls+=1
+        if calls==1:
+            try:started.set();await asyncio.Event().wait()
+            finally:cleaning.set();await release.wait()
+        return [calls]
+    first=asyncio.create_task(cache.get('a',fetch));await started.wait();first.cancel();await cleaning.wait()
+    replacement=asyncio.create_task(cache.get('a',fetch));await asyncio.sleep(0);await asyncio.sleep(0)
+    replacement.cancel()
+    with pytest.raises(asyncio.CancelledError):await replacement
+    third=asyncio.create_task(cache.get('a',fetch));await asyncio.sleep(0);await asyncio.sleep(0)
+    assert calls==1 and not third.done()
+    release.set()
+    with pytest.raises(asyncio.CancelledError):await first
+    assert await third==[2] and calls==2
+    await cache.aclose();assert not cache._tasks and not cache._retiring
