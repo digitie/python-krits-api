@@ -19,3 +19,7 @@
 - 실제 Chromium에서 고속도로/국도 도로 목록, getLinks의 집계 구간·개별 LINK_INFO,
   getMarkers의 고속도로·국도 INFO JSON 문자열을 조사했다. 도로 ID와 표시 노선번호,
   집계 PASNG_SPED 합계와 개별 속도를 구분하고 원시 시각·좌표를 보존한다.
+- T003 PR #3의 리뷰 B가 초기 429 후 refresh 200으로 성공할 수 있는 문제를 재현했다.
+  최초 navigation 응답을 사용하고 별도 refresh를 제거해 수정했다. 최종 `bc143ea`에서
+  두 독립 리뷰가 통과했다. 오프라인 146개/99.15%, 실제 Chromium 12개 및 별도 wheel 설치본
+  조회가 통과했다. 원격 CI 대기 중이며 성공 확인 후 머지한다.
