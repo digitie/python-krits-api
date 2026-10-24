@@ -13,3 +13,5 @@
 - T002 PR #2: 두 독립 리뷰의 접근 화면·timeout·redirect 지적을 수정하고 최종 재검토를 통과했다.
   오프라인 62개/98.39%, live 3개 및 별도 wheel 설치본 live가 통과했다.
   최종 증빙 commit의 원격 CI runner 대기를 확인 중이며 CI 통과 전에는 머지하지 않는다.
+- T002 증빙 commit `381206c`에서 Python 3.11–3.14 및 docs·타입/빌드의 원격 CI 6개 job이
+  모두 성공했다. 최종 기록 commit의 CI를 다시 확인한 뒤 PR #2를 머지한다.
