@@ -13,6 +13,7 @@
 | T007 | Chromium 청크 전송·해시 원본·불변 manifest·마지막 관찰·재검증/재사용 | [#9](https://github.com/digitie/python-krits-api/pull/9) | [독립 리뷰2건·382 오프라인·55 live·설치본·CI](validation/t007.md) |
 | T008 | ZIP/CSV/XLSX 경계·CRC·원문/검사 보고서·명시적 S3 GET 해시 | [#10](https://github.com/digitie/python-krits-api/pull/10) | [독립 리뷰2건·471 오프라인·58 live·설치본·CI](validation/t008.md) |
 | T009 | 현재 VMS·DISASTER 재난구역·공식12종 부분지원/미지원 표 | [#11](https://github.com/digitie/python-krits-api/pull/11) | [독립 재리뷰2건·493 오프라인·전체63/최종영향9 live·CI](validation/t009.md) |
+| T010 | 설치본 전체 기능·전체 ZIP 원문/CRC/prj/재사용·sdist·초기 버전 문서 | [#12](https://github.com/digitie/python-krits-api/pull/12) | [독립 재리뷰2건·498 오프라인·전체64/최종ZIP1 live·설치본·CI](validation/t010.md) |
 
 PR 머지를 확인한 뒤 다음 task를 시작한다.
 
@@ -21,3 +22,6 @@ T004 PR #5는 최종 증빙 head의 CI 6개 job 통과 후 `2de4dc6`으로 머�
 T005 PR #6은 최종 증빙 head의 CI6개 job 통과 후 `4ece092`로 머지했다.
 
 T006 PR #7은 최종 증빙 head CI6개 job 통과 후 `085c329`로 머지했다.
+
+T010 PR #12는 증빙 head `bfad2e5`의 CI6개job 통과 후 `1d430ab`로 머지했다.
+전체 계획과 추가 T006A가 완료됐다. 미지원5종·외부S3계정·PyPI/운영배포의 범위는 각 증빙에 명시했다.
