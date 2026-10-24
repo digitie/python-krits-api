@@ -7,3 +7,6 @@
 | T003 | 도로 목록·양방향 소통 구간/개별 링크·현재 고속도로/국도 돌발, 엄격 파서와 조회 범위 | [#3](https://github.com/digitie/python-krits-api/pull/3) | [독립 리뷰 2건·146 오프라인·12 live·wheel·CI](validation/t003.md) |
 
 PR 머지를 확인한 뒤 다음 task를 시작한다.
+
+T004는 PR #5의 최종 소스에서 독립 리뷰 2건·오프라인 190개·live 22개·설치본·CI를 통과했다.
+최종 증빙 commit의 CI와 PR 머지 확인 후 완료 표로 옮긴다. [증빙](validation/t004.md).
