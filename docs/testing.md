@@ -11,6 +11,10 @@ T002부터 compileall, mypy, pytest coverage 90%, build를 CI에 둔다.
 외부 context 소유권, limiter FIFO/취소/루프 경계다.
 파일 단계는 크기 초과·길이 불일치·HTML 로그인·중단 전송·취소·경로 이탈·동시 저장·
 checksum 불일치·기존 정상본 유지·ZIP traversal/bomb/CRC를 검증한다.
+T008은 raw central directory 이름·항목 수 사전검사, 중복/링크/암호화/압축비/CRC,
+명시적 encoding·XLSX DTD/외부 참조·셀/행 경계와 별도 검사 보고서도 검증한다.
+S3는 공식 SigV4 벡터·오프라인 transport와 localhost 실제 HTTP 독립 서명/객체 손상 검사를
+구분한다. 실제 ITS의 작은 CSV/XLSX는 Chromium 다운로드 후 원본 재검증·형식 읽기까지 수행한다.
 
 T006A는 TTL/LRU/동일 진행 조회 공유·실패 미보관·복사·반복 취소·종료를 검증한다.
 localhost 실제 Chromium 서버의 카운터로 전송 단위 공통 버킷, 캐시 적중0회, 동일 조회1회,

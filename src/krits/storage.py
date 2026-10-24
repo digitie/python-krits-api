@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+from dataclasses import asdict, replace
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -14,7 +16,7 @@ from typing import Any
 
 from ._file_io import run_file_io
 from .exceptions import KritsIntegrityError
-from .models import FileAttachment, StoredFile
+from .models import FileAttachment, FileInspection, StoredFile
 
 CHUNK_SIZE = 64 * 1024
 _HASH = re.compile(r"[0-9a-f]{64}")
@@ -186,6 +188,39 @@ class FileStore:
         descriptor, name = tempfile.mkstemp(prefix="download-", suffix=".part", dir=directory)
         os.close(descriptor)
         return Path(name)
+
+    async def _record_inspection(self, report: FileInspection) -> FileInspection:
+        def publish() -> FileInspection:
+            self._object(report.sha256)
+            data = asdict(report)
+            data.pop("report_path")
+            data["inspected_at"] = report.inspected_at.isoformat()
+            data["metadata"] = [{"name": item.name, "base64": base64.b64encode(item.data).decode("ascii")}
+                                for item in report.metadata]
+            raw = json.dumps({"schema_version": 1, **data}, ensure_ascii=False).encode("utf-8")
+            if len(raw) > 16 * 1024 * 1024:
+                raise KritsIntegrityError("형식 검사 보고서 크기 상한을 넘었습니다")
+            fingerprint = hashlib.sha256(raw).hexdigest()
+            directory = self._path("inspections", report.sha256, mkdir=True)
+            destination = self._path("inspections", report.sha256, fingerprint + ".json")
+            staging = self._path("staging", mkdir=True)
+            descriptor, name = tempfile.mkstemp(prefix="inspection-", suffix=".part", dir=staging)
+            temporary = Path(name)
+            try:
+                with os.fdopen(descriptor, "wb") as output:
+                    output.write(raw); output.flush(); os.fsync(output.fileno())
+                try:
+                    os.link(temporary, destination)
+                except FileExistsError:
+                    if _digest(destination) != (fingerprint, len(raw)):
+                        raise KritsIntegrityError("기존 형식 검사 보고서가 손상됐습니다") from None
+            finally:
+                temporary.unlink(missing_ok=True)
+            return replace(report, report_path=directory / destination.name)
+        try:
+            return await run_file_io(publish)
+        except OSError as exc:
+            raise KritsIntegrityError("형식 검사 보고서를 저장할 수 없습니다") from exc
 
     def _publish(self, temporary: Path, attachment: FileAttachment, sha256: str,
                  size: int, content_type: str) -> StoredFile:

@@ -176,3 +176,59 @@ class StoredFile:
     size_bytes: int
     collected_at: datetime
     content_type: str
+
+
+@dataclass(frozen=True, slots=True)
+class ArchiveMember:
+    """안전성/CRC 검사를 마친 ZIP 항목. 이름은 파일시스템 경로로 사용하지 않는다."""
+
+    name: str
+    size_bytes: int
+    compressed_bytes: int
+    crc32: int
+
+
+@dataclass(frozen=True, slots=True)
+class ArchiveMetadata:
+    """prj/cpg 원문. CRS·인코딩을 추정하거나 변환하지 않는다."""
+
+    name: str
+    data: bytes = field(repr=False)
+
+
+@dataclass(frozen=True, slots=True)
+class FileInspection:
+    """별도 불변 형식 검사 보고서. 원본 다운로드 manifest를 바꾸지 않는다."""
+
+    sha256: str
+    kind: Literal["zip", "xlsx", "csv"]
+    inspected_at: datetime
+    crc_checked: bool
+    members: tuple[ArchiveMember, ...] = ()
+    metadata: tuple[ArchiveMetadata, ...] = ()
+    encoding: str | None = None
+    selected_member: str | None = None
+    table_rows: int | None = None
+    report_path: Path | None = None
+    limits: tuple[tuple[str, int | float], ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class CellFormula:
+    """XLSX 저장 수식 원문. 계산하거나 실행하지 않는다."""
+
+    row_number: int
+    column_number: int
+    text: str
+
+
+@dataclass(frozen=True, slots=True)
+class TableData:
+    """범위 제한을 통과한 원문 셀 값. 숫자/날짜/ID를 추정 변환하지 않는다."""
+
+    rows: tuple[tuple[str | None, ...], ...]
+    row_numbers: tuple[int, ...]
+    encoding: str | None
+    source_member: str | None
+    sheet_name: str | None = None
+    formulas: tuple[CellFormula, ...] = ()

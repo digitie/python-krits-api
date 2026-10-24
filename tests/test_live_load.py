@@ -18,20 +18,24 @@ pytestmark=pytest.mark.live
 async def load_server(monkeypatch):
     requests=[];posts=[];status=[200,200]
     valid=(Path(__file__).parent/'fixtures/events.json').read_bytes()
-    html=b'<!doctype html><title>ITS '+ '국가교통정보센터'.encode()+b'</title><script src="/asset.js"></script><div id="map"></div>'
+    html=b'<!doctype html><link rel="icon" href="data:,"><title>ITS '+ '국가교통정보센터'.encode()+b'</title><script src="/asset.js"></script><div id="map"></div>'
     script=b"fetch('/map/getMarkers',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({body:{data:{type:'',keyword:''}}})});"
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
             requests.append((self.path,time.monotonic()))
             self.send_response(status[1] if self.path=='/asset.js' else 200)
             self.send_header('Content-Type','text/javascript' if self.path=='/asset.js' else 'text/html; charset=utf-8')
-            self.end_headers();self.wfile.write(script if self.path=='/asset.js' else html)
+            self.end_headers()
+            try:self.wfile.write(script if self.path=='/asset.js' else html)
+            except (BrokenPipeError,ConnectionResetError,ConnectionAbortedError):pass
 
         def do_POST(self):
             self.rfile.read(int(self.headers['Content-Length']))
             requests.append((self.path,time.monotonic()));posts.append(status[0])
             self.send_response(status[0]);self.send_header('Content-Type','application/json')
-            self.end_headers();self.wfile.write(valid if status[0]==200 else b'{}')
+            self.end_headers()
+            try:self.wfile.write(valid if status[0]==200 else b'{}')
+            except (BrokenPipeError,ConnectionResetError,ConnectionAbortedError):pass
 
         def log_message(self,*_args):
             pass
@@ -39,7 +43,8 @@ async def load_server(monkeypatch):
     thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
     authority=f'127.0.0.1:{server.server_port}'
     monkeypatch.setattr('krits.client.BASE_URL','http://'+authority)
-    monkeypatch.setattr('krits._browser._allowed_resource',lambda url,kind:urlsplit(url).netloc==authority)
+    monkeypatch.setattr('krits._browser._allowed_resource',lambda url,kind:urlsplit(url).netloc==authority
+                        and kind.lower() in {'document','script','stylesheet','xhr','fetch'})
     try:yield requests,posts,status
     finally:
         await asyncio.to_thread(server.shutdown);server.server_close();await asyncio.to_thread(thread.join)
