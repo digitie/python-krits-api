@@ -14,6 +14,8 @@ from .exceptions import (
 )
 from .models import CatalogChanges, Cctv, DataSnapshot, Detour, DetourRoad, FileAttachment, NodeLinkRelease, OpenDataService, PageSnapshot, Road, RoadEvent, RoadType, StoredFile, TrafficLink, TrafficSection, TravelTime
 from .storage import FileStore
+from .formats import FileLimits, inspect_file, read_csv, read_xlsx
+from .models import ArchiveMember, ArchiveMetadata, CellFormula, FileInspection, TableData
 from .parse import compare_nodelink_catalogs
 
 __all__ = [
@@ -24,4 +26,6 @@ __all__ = [
     "FileAttachment", "OpenDataService",
     "NodeLinkRelease", "CatalogChanges", "compare_nodelink_catalogs",
     "FileStore", "StoredFile", "KritsIntegrityError",
+    "FileLimits", "inspect_file", "read_csv", "read_xlsx", "ArchiveMember", "ArchiveMetadata",
+    "CellFormula", "FileInspection", "TableData",
 ]

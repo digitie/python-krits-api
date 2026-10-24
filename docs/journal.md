@@ -9,6 +9,13 @@
 
 # 작업 기록
 
+- T008: ZIP 원문 이름/항목 수 사전검사와 CRC, prj/cpg 원문·CSV/XLSX 선택 읽기,
+  별도 검사 보고서·명시적 S3 원본 PUT/GET을 구현했다. 오프라인458/96.88%,
+  실제 ITS XLSX/CSV2개와 localhost 독립 서명 HTTP S3계약1개가 통과했다.
+
+- T007 증빙 head `e4f3d2c`의 CI6개job 성공 후 PR #9를 `6d6ac2c`로 머지했다.
+  해당 `origin/main`에서 `codex/t008-formats-s3`를 만들었다.
+
 - T007 최종 `5f3d558`에서 두 독립 재리뷰의 P2를 모두 해결했다.
   오프라인382/98.06%, 전체live55, 별도wheel CSV655bytes·재사용, 소스CI6개job 통과.
   A→B→A의 마지막 선택은 current 포인터로, 공개 중 임시 manifest는 staging 분리로 수정했다.

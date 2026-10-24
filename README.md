@@ -107,7 +107,10 @@ live 테스트/조사 도구만 `KRITS_CHROMIUM_EXECUTABLE`을 선택적으로 �
 `refresh=True`면 새 전송으로 교체 여부를 확인한다. 이전 버전을 삭제하지 않는다.
 `await store.versions(attachment)`, `await store.current(attachment)`, `await store.verify(stored)`로
 보관본을 검증한다. 기본 상한1GiB, 파일명 기반 경로 금지·오류/취소 정리는
-[다운로드·보관 계약](docs/download-storage.md)을 따른다. ZIP 내부 형식 검사는 T008 범위다.
+[다운로드·보관 계약](docs/download-storage.md)을 따른다.
+`inspect_file`은 ZIP의 제한·CRC와 prj/cpg 원문을 검사하고, `read_csv(encoding=...)`·
+`read_xlsx(sheet_name=...)`는 제한된 원문 셀을 읽는다. 별도 `[s3]` extra는 명시적 endpoint에
+원본 PUT 후 GET SHA-256 검증을 제공한다. [형식·S3 계약](docs/formats-s3.md)을 확인한다.
 
 공개 일반 파일 목록은 `await client.list_data_files("event", start_date=date(...), end_date=date(...))`로
 조회한다(`traffic/event/vms`, 1년 이내). 정적 취약구간 CSV는

@@ -1,10 +1,14 @@
 # 재개 지점
 
-현재 단계는 T007 다운로드·manifest 구현이다. T001–T006A는 머지 완료다.
+현재 단계는 T008 형식 검사·선택 S3 구현이다. T001–T007은 머지 완료다.
+T008은 bounded ZIP 사전/CRC 검사·prj/cpg 원문·선택 CSV/XLSX·불변 검사 보고서,
+명시적 S3 signed PUT/GET 해시 확인을 추가했다. 초기 오프라인458/96.88%,
+실제 ITS 형식live2개·localhost HTTP S3계약1개가 통과했다. 두 리뷰/전체live/CI/머지 전이다.
 T007은 CDP64KiB 스트림·상한/길이/HTML 검사·해시 원본·불변 manifest·재검증/재사용을 추가했다.
 최종 소스 `5f3d558`에서 두 독립 재리뷰, 오프라인382/98.06%, 전체live55,
 별도 wheel의 실제 CSV 전송/재사용과 소스CI6개job을 통과했다.
-검증 증빙 head CI 확인 후 PR #9를 머지한다. 계약은 `download-storage.md`를 따른다.
+증빙 head `e4f3d2c`의 CI6개job 성공 후 PR #9를 `6d6ac2c`로 머지했다.
+해당 main에서 `codex/t008-formats-s3`를 만들었다. 계약은 `download-storage.md`를 따른다.
 별도 작업 PR #4의 개별 링크 EPSG:4326 경로 기능은 `65fdf78`로 머지됐고 T006A에
 `1915033`으로 통합했다. [해당 검증 이력](validation/traffic-link-geometry.md)은 보존한다.
 PR #8은 최종 증빙 CI6개 job 통과 후 `d31eeb5`로 머지했다. 해당 `origin/main`에서

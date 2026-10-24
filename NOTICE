@@ -17,6 +17,9 @@ src/krits/_file_io.py는 다음 파일의 취소 안전 helper를 복사·수정
   https://github.com/digitie/python-mois-api
   MIT
 
+src/krits/s3.py의 SigV4 canonical header/HMAC 흐름은 같은 MIT 참조의
+  src/mois/rustfs.py, _signed_request_helper와 _signing_key를 복사·수정했다.
+
   Copyright (c) 2026 digitie
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal

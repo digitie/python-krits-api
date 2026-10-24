@@ -25,6 +25,8 @@ ITS 공개 자료실 ─ Chromium 발견 ─ 첨부 다운로드 ─ 형식/크�
 | `files.py` | CDP response 스트림·64KiB 청크·길이/HTML/상한 검사 | browser, models, storage |
 | `storage.py` | 해시 원본·불변 manifest·재검증·교체 이력 | 표준 라이브러리 |
 | `_file_io.py` | MOIS 기준 thread 작업 완료 후 취소 전파 | asyncio |
+| `formats.py` | bounded ZIP CRC·원문 prj/cpg·명시적 CSV/선택 XLSX | models, storage, defusedxml |
+| `s3.py` (선택 extra) | 명시적 S3 signed PUT/GET·원격 해시 | storage, ratelimit, httpx |
 | `exceptions.py` | 접근·제한·네트워크·스키마·무결성 오류 | 표준 라이브러리 |
 
 클라이언트는 첫 operation에서 자원을 만들고 `async with`/`aclose()`로 닫는다.
