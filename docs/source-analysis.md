@@ -38,7 +38,9 @@ API 공개 사양은 `apiKey`를 필수로 요구한다. 사용자 요구에 따
 | [dangerousCarInfo](https://www.its.go.kr/opendata/opendataList?service=dangerousCarInfo) | 공통 인자만 | `streDt,sntcManageNo,acdntOccrrncDt,acdntAt,acdntEndAt,updtDt,xcrdnt,ycrdnt` | 공개 돌발과 동일하다고 가정하지 않음, T009 |
 | [disaster](https://www.its.go.kr/opendata/opendataList?service=disaster) | `category=D,eventType=all/D03/D04/D06/D07,startDate,endDate`, 선택 bbox | `eventId,category,eventType,eventDetailType,status,startDate,socName,socExtent,LocationInfoType,LocationInfo,linkId,roadName,roadNo,roadDrcType,lanesBlockType,lanesBlocked,message,endDate` | 돌발 화면 DISASTER 분기 발견. 현재 화면과 과거 기간 API의 차이 T009 |
 
-공식 공통 envelope는 `header.resultCode/resultMsg`, `body.totalCount/items` 계열이다.
+공식 응답 구조는 서비스·출력 형식별로 다르다. 소통 XML 예제는 `header.resultCode/resultMsg`,
+`body.totalCount/items` 계열이지만 재난 JSON 예제는 최상위 `resultCode/resultMsg/totalCount/data`다.
+CCTV도 별도 구조를 사용하므로 공식 API 전체에 공통 envelope를 보장하지 않는다.
 성공은 `0/SUCCESS`, 안내 오류는 `4001` 제한, `4002` 인자, `4004` 페이지,
 `4005` 키, `4009` 시스템이다. 이를 웹 응답의 `header.state`와 혼동하지 않는다.
 공식 문서의 속도 단위에 `시/km` 표기가 있으나 웹 화면은 `km/h`다.
@@ -75,8 +77,10 @@ API 공개 사양은 `apiKey`를 필수로 요구한다. 사용자 요구에 따
 `/js/opendata/nodelinkService.js`는 `/opendata/getNodeLinkDataFileList`로
 `body.data={searchType:-1,workingDirectory:"/nodeLink",startDate,endDate}`를 보낸다.
 응답은 `header.state=OK`, `body.data.fileVOList[]`를 가진다.
-목록의 `seq`와 `nodeFileSeq`/`histFileSeq`를 문자열로 보존한다.
-첨부 URL은 `/opendata/nodelinkFileSDownload/DF_<seq>/<fileSeq>`다.
+목록의 `seq`, `atchFileId`, `nodeFileSeq`/`histFileSeq`를 각각 문자열로 보존한다.
+첨부 URL은 `/opendata/nodelinkFileSDownload/<atchFileId>/<fileSeq>`다.
+실제 DOM href를 검증해 쓰거나 응답의 `atchFileId`를 사용한다. 관찰한 `DF_221`을
+`DF_<seq>` 관계로 일반화하거나 별도 식별자를 합성하지 않는다.
 첨부 번호를 0/1로 고정하면 안 된다. 2026-06 배포에서는 ZIP=5, 내역서=6도 관찰했다.
 
 조사 시 최근 1년 목록은 10배포·20첨부였다. 최신은 `DF_221`의
