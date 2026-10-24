@@ -12,6 +12,7 @@ import pytest
 
 from krits import FileAttachment, FileStore, KritsIntegrityError
 from krits._file_io import run_file_io
+from krits.storage import _windows_comparison_name
 
 
 @pytest.fixture
@@ -98,6 +99,25 @@ async def test_store_instances_publish_same_version_concurrently(tmp_path,attach
     a=FileStore(tmp_path);b=FileStore(tmp_path)
     first,second=await asyncio.gather(asyncio.to_thread(publish,a,attachment),asyncio.to_thread(publish,b,attachment))
     assert first==second and len(await a.versions(attachment))==1
+
+
+@pytest.mark.parametrize("value,expected", [
+    ("\\\\?\\C:\\store\\objects", "C:\\store\\objects"),
+    ("\\\\?\\UNC\\server\\share\\store", "\\\\server\\share\\store"),
+    ("\\\\?\\Volume{unknown}\\store", "\\\\?\\Volume{unknown}\\store"),
+    ("C:\\store", "C:\\store"), ("/store/objects", "/store/objects"),
+])
+def test_windows_resolved_prefix_comparison_preserves_other_names(value, expected):
+    assert _windows_comparison_name(value) == expected
+
+
+async def test_concurrent_first_directory_creation_does_not_report_outside_root(tmp_path, attachment):
+    for index in range(30):
+        root = tmp_path / str(index)
+        results = await asyncio.gather(*(asyncio.to_thread(publish, FileStore(root), attachment) for _ in range(2)),
+                                       return_exceptions=True)
+        assert not any(isinstance(result, BaseException) for result in results), results
+        assert results[0] == results[1]
 
 
 async def test_file_io_repeated_cancellation_waits_worker_completion():

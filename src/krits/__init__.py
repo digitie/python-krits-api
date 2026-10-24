@@ -17,6 +17,8 @@ from .storage import FileStore
 from .formats import FileLimits, inspect_file, read_csv, read_xlsx
 from .models import ArchiveMember, ArchiveMetadata, CellFormula, FileInspection, TableData
 from .parse import compare_nodelink_catalogs
+from .capabilities import Capability, list_capabilities
+from .models import DisasterZone, Vms
 
 __all__ = [
     "AsyncTokenBucket", "KritsAccessError", "KritsClient", "KritsClosedError", "KritsError",
@@ -28,4 +30,5 @@ __all__ = [
     "FileStore", "StoredFile", "KritsIntegrityError",
     "FileLimits", "inspect_file", "read_csv", "read_xlsx", "ArchiveMember", "ArchiveMetadata",
     "CellFormula", "FileInspection", "TableData",
+    "Capability", "list_capabilities", "DisasterZone", "Vms",
 ]

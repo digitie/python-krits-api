@@ -84,6 +84,31 @@ class RoadEvent:
 
 
 @dataclass(frozen=True, slots=True)
+class Vms:
+    """공개 지도 VMS의 표출 원문. 메시지 순번·생성시각은 추정하지 않는다."""
+
+    vms_id: str
+    message: str | None
+    route_name: str | None
+    route_number: str | None
+    direction_name: str | None
+    raw_info: dict[str, Any] = field(repr=False)
+
+
+@dataclass(frozen=True, slots=True)
+class DisasterZone:
+    """DISASTER 분기의 현재 재난구역. 공식 API의 과거 도로 돌발과 다른 계약이다."""
+
+    disaster_id: str
+    zone_type: str
+    zone_type_name: str
+    title: str
+    occurred_at_raw: str | None
+    ended_at_raw: str | None
+    raw_info: dict[str, Any] = field(repr=False)
+
+
+@dataclass(frozen=True, slots=True)
 class Cctv:
     """검색 화면의 CCTV 메타데이터. 영상 URL/좌표계의 의미는 추정하지 않는다."""
 

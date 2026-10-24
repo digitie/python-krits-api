@@ -9,7 +9,7 @@ from typing import Any, cast
 from urllib.parse import urlsplit
 
 from .exceptions import KritsSchemaError
-from .models import CatalogChanges, Cctv, DataSnapshot, Detour, DetourRoad, FileAttachment, NodeLinkRelease, Road, RoadEvent, RoadType, TrafficLink, TrafficSection, TravelTime
+from .models import CatalogChanges, Cctv, DataSnapshot, Detour, DetourRoad, DisasterZone, FileAttachment, NodeLinkRelease, Road, RoadEvent, RoadType, TrafficLink, TrafficSection, TravelTime, Vms
 
 
 def decode_json(text: str) -> object:
@@ -175,6 +175,64 @@ def parse_events(value: object, road_type: RoadType | None = None) -> tuple[Road
                 _optional_text(info.get("occrrncLinkId"), "occrrncLinkId"),
                 _optional_text(info.get("mssageCn"), "mssageCn"), dict(info),
             ))
+    return tuple(result)
+
+
+def _marker_info(row: object, id_key: str, kind: str) -> tuple[str, dict[str, Any]]:
+    """문자열 INFO와 Feature 식별자의 일치를 검증한다."""
+    feature = _object(row, kind)
+    properties = _object(feature.get("properties"), "properties")
+    if feature.get("type") != "Feature" or properties.get("type") != kind:
+        raise KritsSchemaError(f"{kind}: Feature 종류가 다릅니다")
+    encoded = properties.get("INFO")
+    if not isinstance(encoded, str):
+        raise KritsSchemaError(f"{kind}: INFO는 JSON 문자열이어야 합니다")
+    info = _object(decode_json(encoded), "INFO")
+    identifier = _text(info.get(id_key), id_key)
+    if feature.get("id") != identifier:
+        raise KritsSchemaError(f"{kind}: Feature 식별자가 일치하지 않습니다")
+    return identifier, info
+
+
+def parse_vms(value: object) -> tuple[Vms, ...]:
+    """지도 버튼의 VMS GeoJSON을 파싱하며 표출 구분자도 원문으로 보존한다."""
+    result = []
+    seen = set()
+    for row in _features(value, "VMS"):
+        identifier, info = _marker_info(row, "vmsId", "VMS")
+        if identifier in seen:
+            raise KritsSchemaError("VMS 식별자가 중복됐습니다")
+        seen.add(identifier)
+        for key in ("vmsEprssCn", "routeNm", "routeNo", "drcNm"):
+            if key not in info:
+                raise KritsSchemaError(f"VMS: {key} 필드가 없습니다")
+        result.append(Vms(identifier, _optional_text(info["vmsEprssCn"], "vmsEprssCn"),
+                          _optional_text(info["routeNm"], "routeNm"),
+                          _optional_text(info["routeNo"], "routeNo"),
+                          _optional_text(info["drcNm"], "drcNm"), dict(info)))
+    return tuple(result)
+
+
+def parse_disaster_zones(value: object) -> tuple[DisasterZone, ...]:
+    """현재 DISASTER 구역 전체를 보존한다. 고속도로/국도의 재난성 돌발은 별도다."""
+    payload = _object(value, "재난 응답")
+    result = []
+    seen = set()
+    for row in _features(payload.get("DISASTER"), "DISASTER"):
+        identifier, info = _marker_info(row, "dangerId", "DISASTER")
+        if identifier in seen:
+            raise KritsSchemaError("재난구역 식별자가 중복됐습니다")
+        seen.add(identifier)
+        for key in ("msfrtnOccrrncDt", "msfrtnEndDt"):
+            if key not in info:
+                raise KritsSchemaError(f"재난구역: {key} 필드가 없습니다")
+        result.append(DisasterZone(
+            identifier, _text(info.get("msfrtnZoneTyCode"), "msfrtnZoneTyCode"),
+            _text(info.get("msfrtnZoneTyCodeNm"), "msfrtnZoneTyCodeNm"),
+            _text(info.get("msfrtnZoneSj"), "msfrtnZoneSj"),
+            _optional_text(info["msfrtnOccrrncDt"], "msfrtnOccrrncDt"),
+            _optional_text(info["msfrtnEndDt"], "msfrtnEndDt"), dict(info),
+        ))
     return tuple(result)
 
 
