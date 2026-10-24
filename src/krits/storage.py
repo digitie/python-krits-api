@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import re
 import tempfile
+import time
 from typing import Any
 
 from ._file_io import run_file_io
@@ -167,7 +168,16 @@ class FileStore:
                 json.dump({"schema_version": 1, "identity": identity, "sha256": sha256,
                            "observed_at": datetime.now(timezone.utc).isoformat()}, output)
                 output.flush(); os.fsync(output.fileno())
-            os.replace(temporary, pointer)
+            for attempt in range(20):
+                try:
+                    os.replace(temporary, pointer)
+                    break
+                except PermissionError:
+                    if attempt == 19:
+                        raise
+                    # Windows의 동시 경로 조회/읽기 handle은 짧게 rename을 막을 수 있다.
+                    # 네트워크 재시도가 아니며 worker 안에서 최대190ms만 기다린다.
+                    time.sleep(0.01)
         finally:
             temporary.unlink(missing_ok=True)
 

@@ -153,3 +153,26 @@ async def test_invalid_current_pointer_is_not_silently_ignored(tmp_path,attachme
     store=FileStore(tmp_path);publish(store,attachment)
     pointer=next((tmp_path/'current').iterdir());pointer.write_text('{}')
     with pytest.raises(KritsIntegrityError):await store.current(attachment)
+
+
+async def test_current_replace_retries_short_windows_handle_conflict(tmp_path,attachment,monkeypatch):
+    store=FileStore(tmp_path);publish(store,attachment,b'A')
+    replace_file=os.replace;attempts=[]
+    def transient(source,destination):
+        attempts.append(True)
+        if len(attempts)<3:raise PermissionError('sharing violation')
+        replace_file(source,destination)
+    monkeypatch.setattr('krits.storage.os.replace',transient)
+    second=publish(store,attachment,b'B')
+    assert len(attempts)==3 and await store.current(attachment)==second
+
+
+async def test_current_replace_failure_preserves_previous_selection(tmp_path,attachment,monkeypatch):
+    store=FileStore(tmp_path);first=publish(store,attachment,b'A');attempts=[]
+    def fail(*_args):attempts.append(True);raise PermissionError('read only')
+    monkeypatch.setattr('krits.storage.os.replace',fail)
+    monkeypatch.setattr('krits.storage.time.sleep',lambda _delay:None)
+    with pytest.raises(PermissionError):publish(store,attachment,b'B')
+    assert len(attempts)==20 and await store.current(attachment)==first
+    assert len(await store.versions(attachment))==2
+    assert not list((tmp_path/'staging').iterdir())
