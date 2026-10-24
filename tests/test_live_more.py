@@ -1,8 +1,14 @@
 """실제 공개 화면에서 CCTV·우회·도시간 메타데이터를 검증한다."""
 
 import os
+import asyncio
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import json
+from pathlib import Path
+import threading
+from urllib.parse import urlsplit
 import pytest
-from krits import KritsClient
+from krits import KritsAccessError, KritsClient, KritsRateLimitError
 
 pytestmark = pytest.mark.live
 
@@ -40,3 +46,45 @@ async def test_live_travel_times(origin):
         assert f'{minutes}분' in rendered or minutes == 0
         if hours: assert f'{hours}시간' in rendered
     print('도시간', result.collected_at.isoformat(), origin, len(result.items))
+
+
+@pytest.mark.parametrize('status', [401, 403, 429])
+@pytest.mark.parametrize('method', ['get_travel_times', 'list_travel_origins'])
+async def test_initial_widget_denial_never_selects_again(monkeypatch, status, method):
+    """초기 거부 후 change에는 정상 자료를 주더라도 추가 요청 없이 중단한다."""
+    observed = []
+    valid = (Path(__file__).parent / 'fixtures' / 'travel.json').read_bytes()
+    html = '''<!doctype html><title>ITS 국가교통정보센터</title><div id="map"></div>
+    <div class="region_list"><div class="select"><select onchange="send(this.value)">
+    <option value="서울">서울</option><option value="대전">대전</option></select></div></div>
+    <script>function send(city) {return fetch('/map/getCityReqTimeByGroup', {method:'POST',
+    headers:{'Content-Type':'application/json'},body:JSON.stringify({body:{data:{grpIds:city}}})});}
+    send('서울');</script>'''.encode()
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200);self.send_header('Content-Type', 'text/html; charset=utf-8')
+            self.end_headers();self.wfile.write(html)
+
+        def do_POST(self):
+            data = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
+            code = status if data['body']['data']['grpIds'] == '서울' else 200
+            observed.append(code)
+            self.send_response(code);self.send_header('Content-Type', 'application/json')
+            self.end_headers();self.wfile.write(b'{}' if code != 200 else valid)
+
+        def log_message(self, *_args):
+            pass
+
+    server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True);thread.start()
+    authority = f'127.0.0.1:{server.server_port}'
+    monkeypatch.setattr('krits.client.BASE_URL', 'http://' + authority)
+    monkeypatch.setattr('krits._browser._allowed_resource', lambda url, kind: urlsplit(url).netloc == authority)
+    try:
+        async with KritsClient(timeout=15, executable_path=os.getenv('KRITS_CHROMIUM_EXECUTABLE')) as c:
+            with pytest.raises(KritsRateLimitError if status == 429 else KritsAccessError):
+                await getattr(c, method)(*(['대전'] if method == 'get_travel_times' else []))
+        assert observed == [status]
+    finally:
+        await asyncio.to_thread(server.shutdown);server.server_close();await asyncio.to_thread(thread.join)

@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+import asyncio
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 import re
 from typing import Literal
 
-from playwright.async_api import BrowserContext, Error as PlaywrightError, Page, Request, Response
+from playwright.async_api import BrowserContext, Error as PlaywrightError, Locator, Page, Request, Response
 
 from ._browser import BASE_URL, BrowserSession
 from ._ratelimit import AsyncTokenBucket
@@ -140,6 +142,42 @@ async def _action_json(
     finally:
         page.remove_listener("request", track)
         page.remove_listener("response", observe_denial)
+
+
+@asynccontextmanager
+async def _travel_widget(page: Page) -> AsyncIterator[tuple[Locator, tuple[str, ...], Callable[[], None]]]:
+    """초기 자동 조회부터 선택 결과까지 같은 endpoint의 거부를 유지한다."""
+    endpoint = "/map/getCityReqTimeByGroup"
+    denied: int | None = None
+
+    def observe(response: Response) -> None:
+        nonlocal denied
+        if response.url == BASE_URL + endpoint and response.status in (401, 403, 429):
+            denied = denied or response.status
+
+    def check() -> None:
+        if denied is not None:
+            _check_status(denied)
+
+    # 이전 문서 timer와 분리한 뒤 최초 요청 이전부터 관찰한다.
+    await page.goto("about:blank")
+    page.on("response", observe)
+    try:
+        await _action_json(page, endpoint, lambda: _open_page(page, "traffic"), {})
+        check()
+        select = page.locator(".region_list .select select")
+        await select.wait_for(state="attached")
+        origins = parse_origins(await select.locator("option").evaluate_all("es => es.map(e => e.value)"))
+        check()
+        yield select, origins, check
+        check()
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        check()
+        raise
+    finally:
+        page.remove_listener("response", observe)
 
 
 class KritsClient:
@@ -289,25 +327,23 @@ class KritsClient:
     async def list_travel_origins(self) -> DataSnapshot[str]:
         """소통 지도 기점 선택 위젯의 지원 도시를 반환한다."""
         async with self._browser.operation() as page:
-            await _open_page(page, "traffic")
-            select = page.locator(".region_list .select select")
-            await select.wait_for(state="attached")
-            origins = parse_origins(await select.locator("option").evaluate_all("es => es.map(e => e.value)"))
-            return DataSnapshot(origins, BASE_URL + _PATHS["traffic"], datetime.now(timezone.utc), {"widget": "region_list"})
+            async with _travel_widget(page) as (_select, origins, _check):
+                return DataSnapshot(origins, BASE_URL + _PATHS["traffic"], datetime.now(timezone.utc), {"widget": "region_list"})
 
     async def get_travel_times(self, origin: str) -> DataSnapshot[TravelTime]:
         """소통 지도 기점 위젯을 선택해 도시간 소요시간을 분 단위로 조회한다."""
         if not isinstance(origin, str) or not origin.strip() or len(origin) > 100:
             raise ValueError("origin은 list_travel_origins의 도시 문자열이어야 합니다")
         async with self._browser.operation() as page:
-            await _open_page(page, "traffic")
-            select = page.locator(".region_list .select select")
-            await select.wait_for(state="attached")
-            origins = parse_origins(await select.locator("option").evaluate_all("es => es.map(e => e.value)"))
-            if origin not in origins:
-                raise ValueError("공개 기점 목록에 없는 도시입니다")
-            # 커스텀 셀렉트가 숨긴 원래 select에 값·change 이벤트를 전달한다.
-            payload = await _action_json(page, "/map/getCityReqTimeByGroup",
-                                         lambda: select.select_option(origin, force=True), {"grpIds": origin})
-            return DataSnapshot(parse_travel_times(payload, origin), BASE_URL + _PATHS["traffic"],
-                                datetime.now(timezone.utc), {"origin": origin, "widget": "region_list"})
+            async with _travel_widget(page) as (select, origins, check):
+                if origin not in origins:
+                    raise ValueError("공개 기점 목록에 없는 도시입니다")
+
+                async def choose() -> object:
+                    check()
+                    # 커스텀 셀렉트가 숨긴 원래 select의 값·change 이벤트다.
+                    return await select.select_option(origin, force=True)
+
+                payload = await _action_json(page, "/map/getCityReqTimeByGroup", choose, {"grpIds": origin})
+                return DataSnapshot(parse_travel_times(payload, origin), BASE_URL + _PATHS["traffic"],
+                                    datetime.now(timezone.utc), {"origin": origin, "widget": "region_list"})

@@ -1,6 +1,7 @@
 """CCTV·우회·도시간의 정상 빈 결과와 깨진 데이터 계약을 구분한다."""
 
 from copy import deepcopy
+import asyncio
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -8,7 +9,8 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from krits import KritsClient, KritsSchemaError
+from krits import KritsClient, KritsRateLimitError, KritsSchemaError
+from krits.client import _travel_widget
 from krits.parse import parse_cctvs, parse_detour_roads, parse_detours, parse_origins, parse_travel_times
 
 
@@ -81,6 +83,7 @@ def more_browser(browser, monkeypatch):
         p.url = url
         return SimpleNamespace(status=200)
     p.goto.side_effect = goto
+    p.on = Mock();p.remove_listener = Mock()
     loc = SimpleNamespace(count=AsyncMock(return_value=1), wait_for=AsyncMock(),
                           evaluate_all=AsyncMock(), click=AsyncMock(), fill=AsyncMock(), select_option=AsyncMock())
     loc.first = loc;loc.locator = Mock(return_value=loc);loc.nth = Mock(return_value=loc)
@@ -126,3 +129,34 @@ async def test_invalid_arguments_are_lazy(browser, method, arg):
     async with KritsClient() as c:
         with pytest.raises(ValueError): await getattr(c, method)(arg)
     browser.manager.start.assert_not_awaited()
+
+
+@pytest.mark.parametrize('phase', ['initial', 'before_select', 'return', 'failure'])
+async def test_widget_denial_guard_covers_navigation_selection_and_return(more_browser, phase):
+    b = more_browser;b.loc.evaluate_all.return_value = ['서울', '대전']
+    denied = SimpleNamespace(url='https://www.its.go.kr/map/getCityReqTimeByGroup', status=429)
+    def deny(): b.page.on.call_args.args[1](denied)
+    if phase == 'initial':
+        async def initial(*_args, **_kwargs): deny()
+        b.action.side_effect = initial
+    with pytest.raises(KritsRateLimitError):
+        async with _travel_widget(b.page) as (_select, _origins, check):
+            if phase == 'before_select': deny();check()
+            if phase == 'return': deny()
+            if phase == 'failure': deny();raise KritsSchemaError('원래 실패')
+    assert b.page.on.call_args.args == b.page.remove_listener.call_args.args
+
+
+async def test_widget_cancel_is_preserved_and_observer_removed(more_browser):
+    b = more_browser;b.loc.evaluate_all.return_value = ['서울']
+    with pytest.raises(asyncio.CancelledError):
+        async with _travel_widget(b.page): raise asyncio.CancelledError
+    assert b.page.on.call_args.args == b.page.remove_listener.call_args.args
+
+
+async def test_widget_initial_action_and_original_error(more_browser):
+    b = more_browser;b.loc.evaluate_all.return_value = ['서울']
+    with pytest.raises(KritsSchemaError):
+        async with _travel_widget(b.page): raise KritsSchemaError('원래 오류')
+    await b.action.call_args.args[2]()
+    assert b.page.goto.call_args.args[0].endswith('/map/traffic')
