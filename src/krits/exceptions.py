@@ -27,3 +27,7 @@ class KritsSchemaError(KritsError):
 
 class KritsProviderError(KritsError):
     """공개 웹 응답이 명시적으로 제공자 처리 실패를 보고함."""
+
+
+class KritsIntegrityError(KritsError):
+    """다운로드·보관본·manifest의 크기 또는 무결성 검증 실패."""

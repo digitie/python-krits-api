@@ -14,12 +14,14 @@ from typing import Literal, ParamSpec, TypeVar, cast
 from playwright.async_api import BrowserContext, Error as PlaywrightError, Locator, Page, Request, Response
 
 from ._browser import BASE_URL, BrowserSession
-from ._cache import RequestCache
+from ._cache import RequestCache, _settle
 from ._ratelimit import AsyncTokenBucket
+from .files import DEFAULT_MAX_BYTES, download_file, validate_attachment
+from .storage import FileStore
 from .exceptions import (
     KritsAccessError, KritsClosedError, KritsNetworkError, KritsProviderError, KritsRateLimitError, KritsSchemaError,
 )
-from .models import Cctv, DataSnapshot, Detour, DetourRoad, FileAttachment, NodeLinkRelease, OpenDataService, PageSnapshot, Road, RoadEvent, RoadType, TrafficSection, TravelTime
+from .models import Cctv, DataSnapshot, Detour, DetourRoad, FileAttachment, NodeLinkRelease, OpenDataService, PageSnapshot, Road, RoadEvent, RoadType, StoredFile, TrafficSection, TravelTime
 from .parse import (decode_json, parse_cctvs, parse_detour_roads, parse_detours, parse_events,
                     nodelink_dom_ids, open_data_ids, parse_nodelink_releases, parse_open_data, parse_origins, parse_roads, parse_traffic,
                     parse_travel_times, parse_weak_files)
@@ -289,6 +291,8 @@ class KritsClient:
         cache_max_entries: int = 32,
     ) -> None:
         self._query_cache = RequestCache(cache_ttl, cache_max_entries)
+        self._file_tasks: set[asyncio.Task[StoredFile]] = set()
+        self._closing = False
         self._browser = BrowserSession(
             timeout=timeout, max_rps=max_rps, rate_limiter=rate_limiter,
             browser_context=browser_context, executable_path=executable_path,
@@ -308,10 +312,40 @@ class KritsClient:
     async def aclose(self) -> None:
         """진행 중 요청 완료를 기다리고 소유 자원을 닫는다. 반복 호출은 안전하다."""
         self._browser._bind_loop()
+        self._closing = True
         try:
             await self._query_cache.aclose()
         finally:
-            await self._browser.aclose()
+            try:
+                if self._file_tasks:
+                    joined = asyncio.gather(*tuple(self._file_tasks), return_exceptions=True)
+                    try:
+                        await asyncio.shield(joined)
+                    except asyncio.CancelledError:
+                        await _settle(joined)
+                        raise
+            finally:
+                await self._browser.aclose()
+
+    async def download_file(self, attachment: FileAttachment, store: FileStore, *,
+                            max_bytes: int = DEFAULT_MAX_BYTES, refresh: bool = False) -> StoredFile:
+        """첨부를 재검증해 재사용한다. refresh=True면 새 전송으로 교체 여부를 확인한다."""
+        self._browser._bind_loop()
+        if self._closing or self._browser._closed:
+            raise KritsClosedError("종료된 클라이언트입니다")
+        validate_attachment(attachment, max_bytes)
+        if not isinstance(store, FileStore) or type(refresh) is not bool:
+            raise ValueError("FileStore와 bool refresh가 필요합니다")
+        task = asyncio.create_task(download_file(self._browser, attachment, store, max_bytes=max_bytes, refresh=refresh))
+        self._file_tasks.add(task)
+        try:
+            return await asyncio.shield(task)
+        except asyncio.CancelledError:
+            task.cancel()
+            await _settle(task)
+            raise
+        finally:
+            self._file_tasks.discard(task)
 
     def clear_cache(self) -> None:
         """완료된 조회 캐시를 비운다. 진행 중 같은 조회는 계속 공유한다."""

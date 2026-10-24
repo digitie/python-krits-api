@@ -9,6 +9,7 @@
 | T005 | 소통·돌발·VMS 기간 ZIP·정적 취약구간 CSV 발견, 날짜·첨부 DOM 대조 | [#6](https://github.com/digitie/python-krits-api/pull/6) | [독립 리뷰 2건·240 오프라인·31 live·wheel·CI](validation/t005.md) |
 | T006 | 노드링크 배포·실제 첨부 ID/번호·ZIP/CSV/XLSX·부분 배포·관찰 차이 | [#7](https://github.com/digitie/python-krits-api/pull/7) | [독립 리뷰 2건·268 오프라인·35 live·wheel·CI](validation/t006.md) |
 | T003M | 별도 작업의 개별 링크 EPSG:4326 경로, 원격 main `65fdf78` 머지 확인 | [#4](https://github.com/digitie/python-krits-api/pull/4) | [별도 작업 검증 기록](validation/traffic-link-geometry.md) |
+| T006A | Opinet 기준 실제 전송 예산·TTL/LRU·동일 조회 공유·취소 정리 | [#8](https://github.com/digitie/python-krits-api/pull/8) | [독립 리뷰2건·309 오프라인·43 live·CI](validation/t006a.md) |
 
 PR 머지를 확인한 뒤 다음 task를 시작한다.
 
