@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 import re
 from typing import Literal
 
-from playwright.async_api import BrowserContext, Error as PlaywrightError, Page, Request
+from playwright.async_api import BrowserContext, Error as PlaywrightError, Page, Request, Response
 
 from ._browser import BASE_URL, BrowserSession
 from ._ratelimit import AsyncTokenBucket
@@ -81,12 +81,18 @@ async def _open_page(browser_page: Page, page: PublicPage) -> str:
 
 
 async def _action_json(
-    page: Page, endpoint: str, action: Callable[[], Awaitable[None]],
+    page: Page, endpoint: str, action: Callable[[], Awaitable[object]],
     expected: dict[str, object],
 ) -> object:
     """이번 동작에서 시작한 요청만 관찰하며 listener를 성공·실패·취소 모두에서 제거한다."""
     requests: set[Request] = set()
     url = BASE_URL + endpoint
+    denied_status: int | None = None
+
+    def observe_denial(response: Response) -> None:
+        nonlocal denied_status
+        if response.url == url and response.status in (401, 403, 429) and denied_status is None:
+            denied_status = response.status
 
     def track(request: Request) -> None:
         if request.url != url or request.method != "POST":
@@ -102,10 +108,15 @@ async def _action_json(
             return
 
     page.on("request", track)
+    page.on("response", observe_denial)
     try:
         async with page.expect_response(lambda response: response.request in requests) as pending:
             await action()
+            if denied_status is not None:
+                _check_status(denied_status)
         response = await pending.value
+        if denied_status is not None:
+            _check_status(denied_status)
         _check_status(response.status)
         if response.url != url:
             raise KritsAccessError("공개 웹 응답이 다른 경로로 이동했습니다")
@@ -113,12 +124,15 @@ async def _action_json(
         if text.lstrip().startswith("<") and re.search(r"로그인|captcha|password|접근\s*(?:제한|거부)", text, re.I):
             raise KritsAccessError("공개 웹 응답이 로그인 또는 보안 확인 화면입니다")
         payload = decode_json(text)
+        if denied_status is not None:
+            _check_status(denied_status)
         if isinstance(payload, dict) and isinstance(payload.get("header"), dict):
             if payload["header"].get("state") != "OK":
                 raise KritsProviderError("공개 웹 제공자가 처리 실패를 반환했습니다")
         return payload
     finally:
         page.remove_listener("request", track)
+        page.remove_listener("response", observe_denial)
 
 
 class KritsClient:
@@ -215,13 +229,11 @@ class KritsClient:
         if road_type is not None:
             _road_type(road_type)
         async with self._browser.operation() as page:
-            await _open_page(page, "outbreak")
-            refresh = page.locator("button[onclick='refreshOutbreak()']").first
-            if not await refresh.count():
-                raise KritsSchemaError("돌발 새로고침 버튼을 찾을 수 없습니다")
+            # 이전 문서의 timer/요청과 분리한 뒤 최초 데이터 요청부터 관찰한다.
+            await page.goto("about:blank")
             payload = await _action_json(
-                page, "/map/getMarkers", refresh.click,
-                {"type": "", "id": None, "drct": None, "keyword": None},
+                page, "/map/getMarkers", lambda: _open_page(page, "outbreak"),
+                {"type": "", "id": None, "drct": None, "keyword": ""},
             )
             return DataSnapshot(parse_events(payload, road_type), BASE_URL + _PATHS["outbreak"],
                                 datetime.now(timezone.utc), {"road_type": road_type or "all", "excluded": "DISASTER"})

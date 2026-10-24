@@ -49,9 +49,10 @@ null 속도는 `None`, 숫자 0은 원문 0이다. 음수·비유한 수·bool·
 
 ## 돌발 웹 응답
 
-`/map/outbreak`에서 실제 새로고침 버튼을 눌러 `/map/getMarkers` 응답을 관찰한다.
-공백 type와 빈 id/drct/keyword인 필터 없는 새로고침 요청만 선택한다.
-자동 초기 로드와 이전 요청은 응답 선택에서 구분한다.
+이전 문서를 `about:blank`로 비워 timer와 요청을 분리한 뒤, `/map/outbreak` navigation 전부터
+최초 `/map/getMarkers` 요청을 관찰한다. `type=""`, `keyword=""`, id/drct 누락인 필터 없는
+초기 로드 응답을 사용하며 별도 새로고침을 보내지 않는다. 초기 401/403/429를 다른 응답의
+성공으로 덮지 않도록 같은 endpoint의 관찰된 접근 거부·제한도 검사한다.
 고속도로 `HIGHWAY`, 국도 `NATIONAL`의 각각 `FeatureCollection`과 행 수를 검증한다.
 `DISASTER`는 별도 재난 계약이므로 이번 모델에서 제외하고 scope에 명시한다.
 

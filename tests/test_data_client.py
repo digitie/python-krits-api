@@ -77,17 +77,15 @@ async def test_event_snapshot_excludes_disaster_and_can_filter_road_type(data_br
     assert all(x.road_type == "national" for x in result.items)
 
 
-async def test_missing_event_refresh_is_schema_error(data_browser):
-    data_browser.locator.count.return_value = 0
-    # 공통 정상 컨테이너는 유지하고 새로고침 버튼만 누락시킨다.
-    data_browser.page.locator.side_effect = lambda selector: (
-        data_browser.locator if "refreshOutbreak" in selector else
-        SimpleNamespace(count=AsyncMock(return_value=0 if ":visible" in selector else 1))
-    )
+async def test_events_observe_initial_navigation_without_refresh(data_browser):
+    data_browser.action.return_value = load_fixture("events.json")
     async with KritsClient() as client:
-        with pytest.raises(KritsSchemaError, match="새로고침"):
-            await client.get_events()
-    data_browser.action.assert_not_awaited()
+        await client.get_events()
+    data_browser.page.goto.assert_awaited_once_with("about:blank")
+    assert data_browser.action.call_args.args[3]["keyword"] == ""
+    await data_browser.action.call_args.args[2]()
+    assert data_browser.page.goto.call_args.args[0].endswith("/map/outbreak")
+    data_browser.locator.click.assert_not_awaited()
 
 
 async def test_unknown_road_does_not_request_traffic(data_browser):
@@ -133,6 +131,8 @@ class ActionPage:
         pending = asyncio.get_running_loop().create_future()
         pending.set_result(self.response)
         yield SimpleNamespace(value=pending)
+        if getattr(self, "exit_denial", False):
+            self.handlers[1](SimpleNamespace(url=self.url, status=429))
 
     async def click(self):
         # 이번 동작 전에 시작한 동일 URL 응답은 선택되지 않는다.
@@ -192,4 +192,31 @@ async def test_action_cancel_removes_observer():
     task.cancel()
     with pytest.raises(asyncio.CancelledError):
         await task
+    assert page.handlers == []
+
+
+async def test_observed_denial_cannot_be_overridden_by_later_success():
+    page = ActionPage()
+
+    async def action():
+        page.handlers[1](SimpleNamespace(url=page.url, status=429))
+        await page.click()
+
+    with pytest.raises(KritsRateLimitError):
+        await _action_json(page, "/map/getLinks", action, {"roadId": "0010"})
+    assert page.handlers == []
+
+
+@pytest.mark.parametrize("phase", ["response_wait", "body_read"])
+async def test_denial_during_response_wait_or_body_read_blocks_success(phase):
+    page = ActionPage()
+    if phase == "response_wait":
+        page.exit_denial = True
+    else:
+        async def body():
+            page.handlers[1](SimpleNamespace(url=page.url, status=429))
+            return '{}'
+        page.response.text.side_effect = body
+    with pytest.raises(KritsRateLimitError):
+        await _action_json(page, "/map/getLinks", page.click, {"roadId": "0010"})
     assert page.handlers == []
