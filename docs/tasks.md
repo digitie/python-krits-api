@@ -5,7 +5,7 @@
 
 | ID | 작업 | 선행 | 수용 기준 | 상태 |
 |---|---|---|---|---|
-| T002 | 패키지·Chromium 기반 | T001 | 키 없는 context, lazy 초기화/실패/취소/종료, FIFO limiter, strict typing·패키징 CI, live 공개 페이지 | 진행 |
+| T002 | 패키지·Chromium 기반 | T001 | 키 없는 context, lazy 초기화/실패/취소/종료, FIFO limiter, strict typing·패키징 CI, live 공개 페이지 | 리뷰/검증 (원격 CI 대기) |
 | T003 | 소통·돌발 조회 | T002 | 실제 화면 요청/DOM 기반 typed 결과, 문자열 ID, 범위/출처, 정상 빈 값과 스키마 실패 구분 | 대기 |
 | T004 | CCTV·우회·도시간 | T003 | 검색 조건/메타데이터 모델, 단위 증명, 영상 자체 다운로드 제외, 3개 기능 live | 대기 |
 | T005 | OpenData 파일 발견 | T004 | 소통·돌발·VMS·취약구간 파일의 실제 조회/권한/형식/날짜 계약, 로그인 필요 시 명시 오류 | 대기 |
