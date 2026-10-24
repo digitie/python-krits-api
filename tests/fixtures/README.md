@@ -19,3 +19,10 @@
 제거했고, detour.json은 방향별 앞 2건이다. travel.json은 해당 도시의 6건이다.
 세션/지도 키/영상/전체 HTML을 포함하지 않는다. 운영 수량을 상수로 보장하는 자료가 아니다.
 
+## T005 파일 목록
+
+`files-traffic/event/vms.json`은 2026-10-24 실제 Chromium에서 2026-10-22~23을 입력하고
+조회한 각 2건 응답이다. fileStrDate 등은 의미를 추정하지 않고 원문 보존했다.
+`files-weak.json`은 같은 날 실제 DOM의 이름·href만 추출한 4개(이름/아이콘 중복 포함)다.
+테스트의 기간 첨부 DOM 값은 실제 관찰한 ID/title/href와 같은 값이다. 원본 ZIP/세션은 포함하지 않는다.
+
