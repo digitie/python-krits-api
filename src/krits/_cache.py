@@ -80,10 +80,14 @@ class RequestCache:
 
             async def produce() -> object:
                 if retiring is not None:
-                    await _settle(retiring)
-                    current = asyncio.current_task()
-                    if current is not None and current.cancelling():
-                        raise asyncio.CancelledError
+                    try:
+                        await asyncio.shield(retiring)
+                    except asyncio.CancelledError:
+                        current = asyncio.current_task()
+                        if current is not None and current.cancelling():
+                            raise
+                    except Exception:
+                        pass  # 이전에 취소된 호출의 정리 실패를 새 호출에 상속하지 않는다.
                 value = await fetch()
                 if (self.ttl > 0 and not self.closed and generation == self._generation
                         and self._flights.get(key) is flight):

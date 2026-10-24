@@ -75,7 +75,12 @@ def _cached_query(function: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[
         except TypeError:
             # 잘못된 비해시 인자도 원래 메서드의 사전 검증에서 처리한다.
             return await function(*args, **kwargs)
-        return await owner._query_cache.get(key, lambda: function(*args, **kwargs))
+        try:
+            async with asyncio.timeout(owner._browser.timeout):
+                return await owner._query_cache.get(key, lambda: function(*args, **kwargs))
+        except TimeoutError:
+            owner._browser._raise_denial()
+            raise KritsNetworkError("공개 조회 시간 제한을 초과했습니다") from None
 
     return wrapped
 

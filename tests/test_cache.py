@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
-from krits import KritsClient,KritsClosedError,KritsRateLimitError,KritsSchemaError,DataSnapshot
+from krits import KritsClient,KritsClosedError,KritsNetworkError,KritsRateLimitError,KritsSchemaError,DataSnapshot
 from krits._cache import RequestCache,_copy
 
 
@@ -188,3 +188,24 @@ async def test_cancelled_replacement_and_close_still_wait_retiring_cleanup():
     results=await asyncio.gather(first,replacement,return_exceptions=True)
     assert all(isinstance(r,asyncio.CancelledError) for r in results)
     await closing;assert not cache._tasks and not cache._retiring
+
+
+async def test_fresh_waiter_can_timeout_during_previous_cleanup(browser):
+    from krits.client import _cached_query
+    c=KritsClient(timeout=0.02)
+    started=asyncio.Event();cleaning=asyncio.Event();release=asyncio.Event();calls=0
+    @_cached_query
+    async def query(owner):
+        nonlocal calls
+        calls+=1
+        try:started.set();await asyncio.Event().wait()
+        finally:cleaning.set();await release.wait()
+    first=asyncio.create_task(query(c));await started.wait();first.cancel();await cleaning.wait()
+    try:
+        with pytest.raises(KritsNetworkError,match='시간 제한'):
+            await asyncio.wait_for(query(c),1)
+        assert calls==1
+    finally:
+        release.set()
+        with pytest.raises(asyncio.CancelledError):await first
+        await c.aclose()
