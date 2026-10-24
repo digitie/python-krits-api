@@ -2,8 +2,9 @@
 
 현재 단계는 T007 다운로드·manifest 구현이다. T001–T006A는 머지 완료다.
 T007은 CDP64KiB 스트림·상한/길이/HTML 검사·해시 원본·불변 manifest·재검증/재사용을 추가했다.
-최초 오프라인376/98.35%, 실제 ITS 작은 XLSX 전송과 localhost Chromium11개가 통과했다.
-두 독립 리뷰·최종 전체live·CI·머지 전이며 계약은 `download-storage.md`를 따른다.
+최종 소스 `5f3d558`에서 두 독립 재리뷰, 오프라인382/98.06%, 전체live55,
+별도 wheel의 실제 CSV 전송/재사용과 소스CI6개job을 통과했다.
+검증 증빙 head CI 확인 후 PR #9를 머지한다. 계약은 `download-storage.md`를 따른다.
 별도 작업 PR #4의 개별 링크 EPSG:4326 경로 기능은 `65fdf78`로 머지됐고 T006A에
 `1915033`으로 통합했다. [해당 검증 이력](validation/traffic-link-geometry.md)은 보존한다.
 PR #8은 최종 증빙 CI6개 job 통과 후 `d31eeb5`로 머지했다. 해당 `origin/main`에서

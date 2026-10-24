@@ -9,6 +9,11 @@
 
 # 작업 기록
 
+- T007 최종 `5f3d558`에서 두 독립 재리뷰의 P2를 모두 해결했다.
+  오프라인382/98.06%, 전체live55, 별도wheel CSV655bytes·재사용, 소스CI6개job 통과.
+  A→B→A의 마지막 선택은 current 포인터로, 공개 중 임시 manifest는 staging 분리로 수정했다.
+  최종 증빙 CI 통과 후 PR #9를 머지한다.
+
 - T007: 실제 Chromium CDP 스트림 probe로 노드링크 CSV655bytes를 확인한 뒤,
   공개 API로 XLSX8927bytes 다운로드·SHA-256·manifest·재사용을 검증했다.
   localhost Chromium11개와 오프라인376/98.35%가 통과했다. 전체 검증·리뷰·머지는 아직 전이다.
