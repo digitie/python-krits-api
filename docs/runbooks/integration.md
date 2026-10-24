@@ -27,6 +27,7 @@ python -m pytest -m live --run-live --run-large-files --file-store F:\dev\_data\
 
 ```powershell
 python -m build
+python tools/check_sdist.py dist/python_krits_api-0.1.0.tar.gz
 python -m pip install --no-deps --target C:\Temp\krits-wheel-SHA dist\python_krits_api-0.1.0-py3-none-any.whl
 python -I tools\installed_e2e.py --package-root C:\Temp\krits-wheel-SHA --file-store F:\dev\_data\krits --chromium C:\path\to\chrome.exe --run-live --run-large-files --history-encoding cp949
 ```
@@ -47,3 +48,7 @@ python -I tools\installed_e2e.py --package-root C:\Temp\krits-wheel-SHA --file-s
 
 외부 S3 계정은 제공되지 않았으므로 전체 live의 S3 검증은 localhost 독립 서명 HTTP 계약이다.
 실제 AWS/MinIO 운영 계정·버킷·자격증명·PyPI 게시·운영 배포는 이 게이트의 범위가 아니다.
+
+sdist에는 tests/conftest·fixture·tools·문서를 함께 포함한다. `check_sdist.py`는 생성한
+배포본을 저장소 밖 임시 디렉터리에 풀고 문서 링크와 전체 오프라인 검사를 실행한다.
+CI의 typecheck-build job도 같은 검사를 수행해 소스 checkout만 통과하는 배포를 구분한다.
