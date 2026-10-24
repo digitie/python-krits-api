@@ -15,3 +15,7 @@
   최종 증빙 commit의 원격 CI runner 대기를 확인 중이며 CI 통과 전에는 머지하지 않는다.
 - T002 증빙 commit `381206c`에서 Python 3.11–3.14 및 docs·타입/빌드의 원격 CI 6개 job이
   모두 성공했다. 최종 기록 commit의 CI를 다시 확인한 뒤 PR #2를 머지한다.
+- PR #2 머지(`b11566e`)를 확인한 뒤 T003 브랜치를 만들었다.
+- 실제 Chromium에서 고속도로/국도 도로 목록, getLinks의 집계 구간·개별 LINK_INFO,
+  getMarkers의 고속도로·국도 INFO JSON 문자열을 조사했다. 도로 ID와 표시 노선번호,
+  집계 PASNG_SPED 합계와 개별 속도를 구분하고 원시 시각·좌표를 보존한다.

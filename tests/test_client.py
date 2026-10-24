@@ -2,7 +2,7 @@
 
 import asyncio
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock
 
 from playwright.async_api import Error as PlaywrightError
 import pytest
@@ -12,28 +12,6 @@ from krits import (
     KritsNetworkError, KritsRateLimitError, KritsSchemaError,
 )
 from krits._browser import BASE_URL, _allowed_resource, _intercept_request
-
-
-@pytest.fixture
-def browser(monkeypatch):
-    page = SimpleNamespace(
-        close=AsyncMock(), set_default_timeout=Mock(),
-        goto=AsyncMock(return_value=SimpleNamespace(status=200)),
-        title=AsyncMock(return_value="오픈데이터 | ITS 국가교통정보센터"),
-        url=BASE_URL + "/opendata/intro",
-    )
-    page.locator = Mock(side_effect=lambda selector: SimpleNamespace(
-        count=AsyncMock(return_value=0 if ":visible" in selector else 1)))
-    session = SimpleNamespace(send=AsyncMock(), on=Mock(), remove_listener=Mock(), detach=AsyncMock())
-    context = SimpleNamespace(new_page=AsyncMock(return_value=page), close=AsyncMock(),
-                              new_cdp_session=AsyncMock(return_value=session))
-    engine = SimpleNamespace(new_context=AsyncMock(return_value=context), close=AsyncMock())
-    playwright = SimpleNamespace(chromium=SimpleNamespace(launch=AsyncMock(return_value=engine)),
-                                 stop=AsyncMock())
-    manager = SimpleNamespace(start=AsyncMock(return_value=playwright))
-    monkeypatch.setattr("krits._browser.async_playwright", lambda: manager)
-    return SimpleNamespace(page=page, context=context, engine=engine, playwright=playwright,
-                           manager=manager, session=session)
 
 
 async def test_lazy_snapshot_and_owned_cleanup(browser):
