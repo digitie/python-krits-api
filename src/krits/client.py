@@ -216,15 +216,17 @@ async def _open_file_catalog(
 
 async def _vms_payload(page: Page) -> object:
     """기존 화면 설정의 자동 VMS 응답을 재사용하고 없을 때만 버튼을 누른다."""
-    responses: list[Response] = []
+    responses: list[tuple[Response, object]] = []
 
     def observe(response: Response) -> None:
         if response.url != BASE_URL + "/map/getMarkers" or response.request.method != "POST":
             return
         try:
             data = response.request.post_data_json
-            if isinstance(data, dict) and data.get("body", {}).get("data", {}).get("type") == "VMS":
-                responses.append(response)
+            if isinstance(data, dict):
+                query = data.get("body", {}).get("data", {})
+                if query.get("type") == "VMS":
+                    responses.append((response, query.get("keyword")))
         except (ValueError, TypeError, AttributeError, PlaywrightError):
             return
 
@@ -233,7 +235,9 @@ async def _vms_payload(page: Page) -> object:
         await _open_page(page, "traffic")
         await page.wait_for_load_state("networkidle")
         payload: object = None
-        for response in responses:
+        for response, keyword in responses:
+            if keyword != "":
+                raise KritsSchemaError("초기 VMS 응답의 검색 조건이 전체 조회와 다릅니다")
             payload = await _response_json(response, BASE_URL + "/map/getMarkers")
             parse_vms(payload)
         if responses:

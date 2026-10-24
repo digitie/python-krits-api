@@ -29,6 +29,7 @@
 [markerOl.js](https://www.its.go.kr/js/map/markerOl.js)의 `getVmsMarkerList`가 사용하는
 `/map/getMarkers` POST `body.data={type:"VMS",keyword:""}`의 응답만 읽는다.
 기존 화면 설정으로 초기 VMS 요청이 발생하면 먼저 검증해 재사용한다. 별도 refresh를 하지 않는다.
+초기 응답도 빈 keyword만 허용하며 다른 검색 조건이면 스키마 오류로 중단한다.
 추가 endpoint를 합성하거나 인증 API를 호출하지 않는다.
 
 GeoJSON `FeatureCollection`의 `totalFeatures`와 실제 행 수, `Feature`/properties.type=`VMS`,
@@ -77,6 +78,7 @@ traffic/outbreak/cctv/detour/travelTime 화면과 공개 mapOl/markerOl/polyline
 전체 오프라인 검사에서 기존 동시 저장1건이 실패했다. 두 worker가 처음 manifest 디렉터리를
 생성하는 사이 `Path.resolve()`가 한쪽에만 `\\?\` 접두사를 남기는 상황을 별도 실행으로 재현했다.
 동일 드라이브/UNC 경로의 비교 표기를 맞췄으며 symlink/바깥 경로 검사는 유지한다.
+비교만 정규화하며 실제 I/O는 원래 resolve 경로를 보존해 확장 경로의 trailing dot도 유지한다.
 Volume GUID 등 다른 장치 이름은 변환하지 않는다. 동시 생성30쌍과 접두사 단위 테스트를 추가했다.
 근거는 [CPython ntpath.realpath 구현](https://github.com/python/cpython/blob/main/Lib/ntpath.py)의
 접두사 제거 전 재조회 분기다. 네트워크 재시도나 접근 정책 변경은 없다.

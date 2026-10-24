@@ -51,9 +51,8 @@ def _windows_comparison_name(value: str) -> str:
     return value
 
 
-def _resolved_path(path: Path) -> Path:
-    resolved = path.resolve()
-    return Path(_windows_comparison_name(str(resolved))) if os.name == "nt" else resolved
+def _comparison_path(path: Path) -> Path:
+    return Path(_windows_comparison_name(str(path))) if os.name == "nt" else path
 
 
 class FileStore:
@@ -63,14 +62,14 @@ class FileStore:
         self.root = Path(root).absolute()
 
     def _path(self, *parts: str, mkdir: bool = False) -> Path:
-        root = _resolved_path(self.root)
+        root = self.root.resolve()
         path = root.joinpath(*parts)
         for candidate in (path, *path.parents):
             if candidate == root:
                 break
             if candidate.is_symlink():
                 raise KritsIntegrityError("보관 경로에 심볼릭 링크가 있습니다")
-        if not _resolved_path(path).is_relative_to(root):
+        if not _comparison_path(path.resolve()).is_relative_to(_comparison_path(root)):
             raise KritsIntegrityError("보관 경로가 root를 벗어났습니다")
         if mkdir:
             path.mkdir(parents=True, exist_ok=True)

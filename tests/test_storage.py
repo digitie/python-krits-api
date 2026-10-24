@@ -120,6 +120,20 @@ async def test_concurrent_first_directory_creation_does_not_report_outside_root(
         assert results[0] == results[1]
 
 
+def test_extended_windows_root_keeps_literal_trailing_dot_for_io(tmp_path):
+    if os.name == "nt":
+        root = Path("\\\\?\\" + str(tmp_path) + "\\literal.")
+        root.mkdir()
+        try:
+            directory = FileStore(root)._path("objects", mkdir=True)
+            assert directory == root / "objects"
+            assert (root / "objects").is_dir()
+            assert not (tmp_path / "literal").exists()
+        finally:
+            (root / "objects").rmdir()
+            root.rmdir()
+
+
 async def test_file_io_repeated_cancellation_waits_worker_completion():
     started=threading.Event();release=threading.Event();finished=[]
     def operation():started.set();release.wait();finished.append(True)

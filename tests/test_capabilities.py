@@ -124,7 +124,8 @@ async def test_new_queries_use_actions_and_shared_cache(browser, monkeypatch, me
 
 
 @pytest.mark.parametrize("status", [200, 403])
-async def test_initial_vms_response_is_validated_without_button_retry(monkeypatch, status):
+@pytest.mark.parametrize("keyword", ["", "filtered-value"])
+async def test_initial_vms_response_is_validated_without_button_retry(monkeypatch, status, keyword):
     listeners = []
     locator = SimpleNamespace(click=AsyncMock())
     page = SimpleNamespace(on=lambda event, fn: listeners.append(fn),
@@ -137,10 +138,13 @@ async def test_initial_vms_response_is_validated_without_button_retry(monkeypatc
                                         request=SimpleNamespace(method="POST", post_data_json=body)))
         listeners[0](SimpleNamespace(url="https://www.its.go.kr/map/getMarkers", status=status,
                                     text=AsyncMock(return_value=json.dumps(payload("vms"))),
-                                    request=SimpleNamespace(method="POST", post_data_json={"body": {"data": {"type": "VMS"}}})))
+                                    request=SimpleNamespace(method="POST", post_data_json={"body": {"data": {"type": "VMS", "keyword": keyword}}})))
 
     monkeypatch.setattr("krits.client._open_page", open_page)
-    if status == 200:
+    if keyword != "":
+        with pytest.raises(KritsSchemaError, match="검색 조건"):
+            await _vms_payload(page)
+    elif status == 200:
         assert await _vms_payload(page) == payload("vms")
     else:
         from krits import KritsAccessError
