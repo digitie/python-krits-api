@@ -38,4 +38,5 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 pythonpath = ["src"]
 addopts = "-ra"
-markers = ["live: 키 없이 실제 Chromium과 ITS 공개 사이트를 사용하는 opt-in 테스트"]
+markers = ["live: 키 없이 실제 Chromium과 ITS 공개 사이트를 사용하는 opt-in 테스트",
+           "large_file: 전체 노드링크 ZIP의 별도 opt-in 전송/검사"]

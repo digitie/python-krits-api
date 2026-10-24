@@ -1,7 +1,7 @@
 # python-krits-api
 
 ITS 국가교통정보센터의 공개 웹 교통정보와 파일, 표준노드링크 자료실을
-**API 키 없이 Chromium으로 수집**하는 비동기 Python 라이브러리를 개발한다.
+**API 키 없이 Chromium으로 수집**하는 비동기 Python 라이브러리다.
 공식 API의 인증·쿼터를 사용하는 클라이언트 대신 공개 화면에서 제공되는 유사 기능을 구현한다.
 공식 서비스가 아니며 화면과 공식 Open API의 데이터 범위·필드는 다를 수 있다.
 
@@ -28,13 +28,38 @@ LICENSE는 기존 GPL-3.0을 유지하며 참조 출처는 [구조 문서](docs/
 
 ## 설치와 현재 제공 기능
 
+Python3.11 이상에서 저장소 버전을 설치한다. PyPI에는 게시하지 않았다.
+
+```bash
+python -m pip install "git+https://github.com/digitie/python-krits-api.git@main"
+python -m playwright install chromium
+```
+
+개발 checkout에서는 다음과 같이 설치한다.
+
 ```bash
 python -m pip install -e ".[dev]"
 python -m playwright install chromium
 ```
 
-T003에서 도로 목록·방향별 소통·현재 돌발 조회를 추가했다. `get_page_snapshot()`은
-공개 페이지의 제목·출처·UTC 수집 시각을 확인한다. 공개 첨부 다운로드는 T007에서 추가했다.
+공개 웹과 공식 API는 계약이 다르다. [12종 대응 상세](docs/remaining-services.md)와
+`list_capabilities()`로 지원 범위를 확인한다.
+
+| 기능 | 공개 메서드 | 범위 |
+|---|---|---|
+| 도로/소통 | `list_roads`, `get_traffic` | 도로·방향 선택, 구간/개별 링크·속도·경로 |
+| 돌발 | `get_events` | 현재 고속도로·국도 |
+| CCTV | `search_cctvs` | 명칭 검색 메타데이터 |
+| 우회/소요시간 | `list_detour_roads`, `get_detours`, `list_travel_origins`, `get_travel_times` | 현재 비교/기점 위젯 |
+| VMS | `get_vms` | 현재 표출 원문 |
+| 재난 | `get_disaster_zones` | 현재 DISASTER 구역 |
+| 공개 파일 | `list_data_files` | 소통/돌발/VMS 기간 ZIP, 취약구간 CSV |
+| 노드링크 | `list_nodelink_releases`, `compare_nodelink_catalogs` | 배포/첨부와 같은 범위 관찰 차이 |
+| 원본 관리 | `download_file`, `FileStore` | 청크 전송·해시 버전·manifest·재사용 |
+| 형식/S3 | `inspect_file`, `read_csv`, `read_xlsx`, 선택 `S3Store` | 제한 검사/읽기·원격 PUT/GET 해시 |
+| 진단 | `get_page_snapshot` | 제목·출처·수집 시각 |
+
+예측·VDS·주의운전·VSL·위험물 전용 조회는 공개 웹 계약을 확인하지 못해 미지원이다.
 
 ```python
 import asyncio
@@ -97,6 +122,31 @@ live 테스트/조사 도구만 `KRITS_CHROMIUM_EXECUTABLE`을 선택적으로 �
 
 ## 개발 검증
 
+노드링크 원문 보관의 최소 예다. 현재 목록의 첫 배포를 확인해 첨부를 선택하며,
+과거 배포/부분 배포 공지와 전국 완전성은 별도로 확인해야 한다.
+
+```python
+from datetime import date, timedelta
+from krits import FileLimits, FileStore, KritsClient, inspect_file
+
+async def collect():
+    end = date.today()
+    store = FileStore("../krits-files")
+    async with KritsClient(timeout=1200) as client:
+        releases = await client.list_nodelink_releases(start_date=end-timedelta(days=300), end_date=end)
+        attachment = releases.items[0].data_file
+        if attachment is None:
+            raise ValueError("선택한 배포에 ZIP 첨부가 없습니다")
+        stored = await client.download_file(attachment, store)  # 대용량 실제 전송
+        report = await inspect_file(store, stored, limits=FileLimits(
+            max_member_bytes=2*1024**3, max_total_bytes=6*1024**3))
+        print(stored.sha256, report.members, report.metadata)
+```
+
+원본 상한은 기본1GiB, 개별/총 해제 검사 상한은 명시적2/6GiB다. ZIP을 자동 해제하지 않는다.
+CSV는 확인된 `encoding=`을 지정한다. 기존 원본 재요청은 로컬 hash를 검증해 재사용한다.
+실제 교체 확인은 `refresh=True`다. 현재 포인터·manifest·검사 보고서와 원본을 함께 보존한다.
+
 현재 VMS 표출 원문은 `await client.get_vms()`, 현재 재난구역은
 `await client.get_disaster_zones()`로 조회한다. 공식 12종의 지원·미지원과 한계는
 `from krits import list_capabilities` 및 [대응표](docs/remaining-services.md)를 확인한다.
@@ -138,4 +188,7 @@ python -m build
 ```
 
 기본 테스트는 네트워크나 설치된 브라우저를 요구하지 않는다. live에는 실제 ITS 네트워크와
-Chromium이 필요하다. 전체 파일 다운로드 검증은 아직 제공하지 않는다.
+Chromium이 필요하다. 전체 ZIP은 `--run-large-files --file-store <저장소 밖 경로>`의 별도 opt-in이다.
+최종 통합 게이트에서는 두 플래그로 skip 없이 실행한다. 설치본 격리 실행과 정확한 범위는
+[통합 runbook](docs/runbooks/integration.md)을 따른다.
+[변경 기록](CHANGELOG.md)과 [완료 목록](docs/tasks-done.md)에 단계별 결과가 있다.

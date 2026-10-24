@@ -9,6 +9,9 @@
 
 # 작업 기록
 
+- T009 증빙 head84ba1da CI6개job 성공 후 PR #11을 c22fa34로 머지했다.
+  해당 origin/main에서 codex/t010-integration을 만들었다. 별도 wheel 통합과 전체 ZIP opt-in을 검증한다.
+
 - T009 최종 `f441c93`: 두 독립 재리뷰 통과, offline493/97.05%, mypy/build/CI6개job 통과.
   전체live63개는 c5cf9bf, 수정 후 영향 범위live9개는 최종 SHA에서 통과했다.
   실행 SHA·시각·범위·초기 실패는 `validation/t009.md`에 구분한다. 증빙 CI 확인 후 머지한다.

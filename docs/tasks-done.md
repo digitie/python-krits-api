@@ -12,6 +12,7 @@
 | T006A | Opinet 기준 실제 전송 예산·TTL/LRU·동일 조회 공유·취소 정리 | [#8](https://github.com/digitie/python-krits-api/pull/8) | [독립 리뷰2건·309 오프라인·43 live·CI](validation/t006a.md) |
 | T007 | Chromium 청크 전송·해시 원본·불변 manifest·마지막 관찰·재검증/재사용 | [#9](https://github.com/digitie/python-krits-api/pull/9) | [독립 리뷰2건·382 오프라인·55 live·설치본·CI](validation/t007.md) |
 | T008 | ZIP/CSV/XLSX 경계·CRC·원문/검사 보고서·명시적 S3 GET 해시 | [#10](https://github.com/digitie/python-krits-api/pull/10) | [독립 리뷰2건·471 오프라인·58 live·설치본·CI](validation/t008.md) |
+| T009 | 현재 VMS·DISASTER 재난구역·공식12종 부분지원/미지원 표 | [#11](https://github.com/digitie/python-krits-api/pull/11) | [독립 재리뷰2건·493 오프라인·전체63/최종영향9 live·CI](validation/t009.md) |
 
 PR 머지를 확인한 뒤 다음 task를 시작한다.
 
