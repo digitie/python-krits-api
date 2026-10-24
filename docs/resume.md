@@ -2,8 +2,10 @@
 
 현재 단계는 T008 형식 검사·선택 S3 구현이다. T001–T007은 머지 완료다.
 T008은 bounded ZIP 사전/CRC 검사·prj/cpg 원문·선택 CSV/XLSX·불변 검사 보고서,
-명시적 S3 signed PUT/GET 해시 확인을 추가했다. 초기 오프라인458/96.88%,
-실제 ITS 형식live2개·localhost HTTP S3계약1개가 통과했다. 두 리뷰/전체live/CI/머지 전이다.
+명시적 S3 signed PUT/GET 해시 확인을 추가했다. 최종 `1424b77`에서 두 독립 재리뷰,
+오프라인471/96.94%·전체live58·별도wheel CSV읽기/보고서·소스CI6개job을 통과했다.
+증빙 head CI 성공 확인 후 PR #10을 머지한다. 최초307과 fixture favicon 실패는
+`validation/t008.md`에 성공과 분리해 기록했다.
 T007은 CDP64KiB 스트림·상한/길이/HTML 검사·해시 원본·불변 manifest·재검증/재사용을 추가했다.
 최종 소스 `5f3d558`에서 두 독립 재리뷰, 오프라인382/98.06%, 전체live55,
 별도 wheel의 실제 CSV 전송/재사용과 소스CI6개job을 통과했다.
