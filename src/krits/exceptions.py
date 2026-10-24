@@ -23,3 +23,7 @@ class KritsNetworkError(KritsError):
 
 class KritsSchemaError(KritsError):
     """공개 화면이나 응답 구조가 기대한 계약과 다름."""
+
+
+class KritsProviderError(KritsError):
+    """공개 웹 응답이 명시적으로 제공자 처리 실패를 보고함."""

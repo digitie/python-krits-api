@@ -1,0 +1,83 @@
+{
+  "HIGHWAY": {
+    "type": "FeatureCollection",
+    "features": [
+      {
+        "type": "Feature",
+        "geometry_name": "GEOMETRY",
+        "id": "20261024072721",
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            128.037316,
+            37.259267
+          ]
+        },
+        "properties": {
+          "INFO": "{\"idx\":1,\"dataType\":\"H\",\"orginlId\":\"900000\",\"occrrncTm\":1792794441000,\"cnznId\":\" \",\"roadNo\":\"55\",\"roadNm\":\"중앙선\",\"roadDrcTy\":\"기점\",\"outbrkId\":\"20261024072721\",\"outbrkTy\":\"06\",\"outbrkTyNm\":\"강우\",\"outbrkDetailInfo\":\" \",\"occrrncLinkId\":\"2510007731\",\"x\":128.037316,\"y\":37.259267,\"mssageCn\":\"\\\"빗길\\\"주의\",\"registDt\":1792794441000,\"edDt\":null,\"stdLinkInfo\":\"2510005900 2510007702 2510007731 2511021600 2730015401 2730017900 2730018802 2730018803 2730037200 2730045401 2730612000 2730612200 2820004200 2820010401 2820010402 2820018200 2820018301 2820026901\",\"lcInfo\":\"치악(휴)부근(300K)-단양(247K)\",\"intrcpAt\":null,\"cnt\":0}",
+          "type": "ACDNT"
+        }
+      },
+      {
+        "type": "Feature",
+        "geometry_name": "GEOMETRY",
+        "id": "20261024072721",
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            128.364192,
+            36.917966
+          ]
+        },
+        "properties": {
+          "INFO": "{\"idx\":2,\"dataType\":\"H\",\"orginlId\":\"900000\",\"occrrncTm\":1792794441000,\"cnznId\":\" \",\"roadNo\":\"55\",\"roadNm\":\"중앙선\",\"roadDrcTy\":\"종점\",\"outbrkId\":\"20261024072721\",\"outbrkTy\":\"06\",\"outbrkTyNm\":\"강우\",\"outbrkDetailInfo\":\" \",\"occrrncLinkId\":\"2820003401\",\"x\":128.364192,\"y\":36.917966,\"mssageCn\":\"\\\"빗길\\\"주의\",\"registDt\":1792794441000,\"edDt\":null,\"stdLinkInfo\":\"2510006000 2510007801 2510007802 2510007811 2511021500 2730015301 2730018000 2730018702 2730018703 2730037100 2730045301 2730611900 2730612100 2820004100 2820010301 2820010302 2820018100 2820018401 2820027001\",\"lcInfo\":\"단양(247K)-치악(휴)부근(300K)\",\"intrcpAt\":null,\"cnt\":0}",
+          "type": "ACDNT"
+        }
+      }
+    ],
+    "totalFeatures": 2
+  },
+  "NATIONAL": {
+    "type": "FeatureCollection",
+    "features": [
+      {
+        "type": "Feature",
+        "geometry_name": "GEOMETRY",
+        "id": "20261024389465",
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            128.76217,
+            35.65109
+          ]
+        },
+        "properties": {
+          "INFO": "{\"idx\":1,\"dataType\":\"N\",\"outbrkId\":\"20261024389465\",\"outbrkTy\":\"C\",\"outbrkTyNm\":\"공사\",\"x\":128.76217,\"y\":35.65109,\"outbrkDetailTy\":\"C04\",\"outbrkDetailTyNm\":\"시설물보수작업\",\"roadGrad\":null,\"roadNo\":\"20\",\"roadNm\":\"국도20호선\",\"roadDrcTy\":\"종점방향\",\"occrrncLinkId\":\"3660152500\",\"occrrncTm\":1792793760000,\"registDt\":1792793781000,\"edDt\":null,\"intrcpAt\":null,\"cartrkCnrlMth\":null,\"lcSe\":null,\"areaInfo\":\"원정교동측→원당교차로\",\"lcInfo\":\"청도 원당교차로\",\"mssageCn\":null,\"stEdNm\":null,\"cnt\":0}",
+          "type": "ACDNT"
+        }
+      },
+      {
+        "type": "Feature",
+        "geometry_name": "GEOMETRY",
+        "id": "20261024389462",
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            128.57422,
+            35.44245
+          ]
+        },
+        "properties": {
+          "INFO": "{\"idx\":2,\"dataType\":\"N\",\"outbrkId\":\"20261024389462\",\"outbrkTy\":\"C\",\"outbrkTyNm\":\"공사\",\"x\":128.57422,\"y\":35.44245,\"outbrkDetailTy\":\"C04\",\"outbrkDetailTyNm\":\"시설물보수작업\",\"roadGrad\":null,\"roadNo\":\"79\",\"roadNm\":\"국도79호선\",\"roadDrcTy\":\"종점방향\",\"occrrncLinkId\":\"3910012400\",\"occrrncTm\":1792793700000,\"registDt\":1792793731000,\"edDt\":null,\"intrcpAt\":null,\"cartrkCnrlMth\":null,\"lcSe\":null,\"areaInfo\":\"일성레져산업부곡지점→원앙삼거리\",\"lcInfo\":\"창녕 원앙삼거리\",\"mssageCn\":null,\"stEdNm\":null,\"cnt\":0}",
+          "type": "ACDNT"
+        }
+      }
+    ],
+    "totalFeatures": 2
+  },
+  "DISASTER": {
+    "type": "FeatureCollection",
+    "features": [],
+    "totalFeatures": 0
+  }
+}

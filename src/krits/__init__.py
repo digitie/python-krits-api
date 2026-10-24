@@ -7,12 +7,14 @@ from .exceptions import (
     KritsClosedError,
     KritsError,
     KritsNetworkError,
+    KritsProviderError,
     KritsRateLimitError,
     KritsSchemaError,
 )
-from .models import PageSnapshot
+from .models import DataSnapshot, PageSnapshot, Road, RoadEvent, RoadType, TrafficLink, TrafficSection
 
 __all__ = [
     "AsyncTokenBucket", "KritsAccessError", "KritsClient", "KritsClosedError", "KritsError",
     "KritsNetworkError", "KritsRateLimitError", "KritsSchemaError", "PageSnapshot", "PublicPage",
+    "DataSnapshot", "Road", "RoadEvent", "RoadType", "TrafficLink", "TrafficSection", "KritsProviderError",
 ]

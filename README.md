@@ -33,8 +33,8 @@ python -m pip install -e ".[dev]"
 python -m playwright install chromium
 ```
 
-현재는 T002의 브라우저 기반을 구현했다. `get_page_snapshot()`은 공개 페이지의 제목·출처·
-UTC 수집 시각을 확인한다. 실제 교통정보 목록·파일 다운로드는 후속 task에서 추가한다.
+T003에서 도로 목록·방향별 소통·현재 돌발 조회를 추가했다. `get_page_snapshot()`은
+공개 페이지의 제목·출처·UTC 수집 시각을 확인한다. 파일 다운로드는 후속 task에서 추가한다.
 
 ```python
 import asyncio
@@ -43,11 +43,32 @@ from krits import AsyncTokenBucket, KritsClient
 async def main():
     budget = AsyncTokenBucket(1, capacity=1)
     async with KritsClient(rate_limiter=budget) as client:
-        page = await client.get_page_snapshot("opendata")
-        print(page.title, page.source_url, page.collected_at)
+        roads = await client.list_roads(road_type="highway")
+        traffic = await client.get_traffic(roads.items[0].road_id, direction="1")
+        for section in traffic.items:
+            for link in section.links:
+                print(section.name, link.link_id, link.speed_kmh)
+        events = await client.get_events()
+        print(events.source_url, events.collected_at, len(events.items))
 
 asyncio.run(main())
 ```
+
+`get_traffic`의 `road_id`는 `list_roads`의 4자리 문자열이다. 표시 노선번호 `1`과 도로 ID
+`0010`은 다르다. `road_type`은 `highway`/`national`, 방향은 고속도로 `1`/`2`,
+국도 `3`/`4`이며 기본값은 각각 `1`/`3`이다. 실제 웹의 방향 코드를 보존한다.
+구간 ID와 개별 표준 링크 ID도 구분하며 링크 순서를 바꾸거나 중복 제거하지 않는다.
+개별 링크의 `speed_kmh`와 `length_m`를 제공하고, 집계 INFO의 속도 합계를 속도로 사용하지 않는다.
+단위가 확정되지 않은 `TIME`, 돌발 발생시각·좌표는 `raw`/`raw_info`로 보존한다.
+소통 속도의 명시적 null은 `None`으로 보존한다. 0은 제공자 원시 수치이며 정차/정보 없음의
+해석을 임의로 부여하지 않는다. 응답 JSON 수치를 문자열로 바꿔 보내는 스키마 변경은 오류다.
+
+조회 결과는 `DataSnapshot.items`, `source_url`, `collected_at`, `scope`,
+`complete=False`, `completeness_note`를 가진다. 전국 모든 도로의 완전 수집을 뜻하지 않는다.
+`get_events(road_type="national")`처럼 도로 종류를 선택할 수 있으며 `DISASTER` 재난 분기는
+별도 계약이라 포함하지 않는다. 국도 돌발의 메시지는 실제 null일 수 있다.
+필수 필드·행 수·도로/방향 불일치와 잘못된 JSON은 `KritsSchemaError`, 제공자 처리 실패는
+`KritsProviderError`다. 정상 빈 FeatureCollection만 빈 `items`로 반환한다.
 
 페이지 이름은 `opendata`, `traffic`, `outbreak`, `cctv`, `detour`, `travel_time`, `nodelink`다.
 임의 URL은 받지 않는다. 기본 1 RPS/burst=1은 명시적 수집 operation의 예산이며
