@@ -1,3 +1,10 @@
+# Transport 지도용 T003 후속 — 진행 중
+
+- `codex/traffic-link-geometry`는 머지된61b357f 위에서 개별 TrafficLink.path의 EPSG:4326 좌표 계약만 추가한다.
+- 공개 polylineOl.js의 실제 LineString 변환과 경부선65구간/361링크의 path를 확인했다.
+- 현재 T004 이후 작업은 원래 체크아웃에서 계속하며 이 후속은 그 파일·진행 순서를 바꾸지 않는다.
+- 오프라인/strict type·실제 Chromium 양방향·두 독립 리뷰·CI 전에 머지하지 않는다.
+
 # 재개 지점
 
 T001 문서 PR #1은 `1657e13`으로 머지했다. T002 브랜치에서

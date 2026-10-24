@@ -48,6 +48,9 @@ class TrafficLink:
     speed_kmh: float | None
     length_m: float
     raw: dict[str, Any] = field(repr=False)
+    # 공개 polylineOl.js의 LineString(link.path).transform('EPSG:4326', ...) 계약.
+    # geometry가 없는 과거·축약 응답은 빈 tuple이며 선로를 추정하지 않는다.
+    path: tuple[tuple[float, float], ...] = field(default=(), repr=False)
 
 
 @dataclass(frozen=True, slots=True)

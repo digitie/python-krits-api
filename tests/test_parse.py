@@ -151,3 +151,23 @@ def test_invalid_or_changed_road_dom(value):
 def test_invalid_json(text):
     with pytest.raises(KritsSchemaError):
         decode_json(text)
+
+
+
+def test_traffic_path_preserves_wgs84_order_without_mutating_raw():
+    payload = fixture("traffic-highway.json")
+    path = [[127.01645974799, 37.5176283875577], [127.016366406254, 37.517439662834]]
+    payload["features"][0]["properties"]["LINK_INFO"][0]["path"] = path
+    result = parse_traffic(payload, Road("0010", "1", "경부", "highway"), "1")
+    link = result[0].links[0]
+    assert link.path == tuple(tuple(point) for point in path)
+    assert link.raw["path"] == path
+    assert result[-1].links[-1].path == ()
+
+
+@pytest.mark.parametrize("path", [[], [[127, 37]], [[127, 37, 0], [127, 37]], [[True, 37], [127, 37]], [["127", 37], [127, 37]], [[float("nan"), 37], [127, 37]], [[127, 91], [127, 37]], [[181, 37], [127, 37]], [[10**400, 37], [127, 37]], [[127, 37]] * 20_001])
+def test_invalid_traffic_path_is_not_silently_dropped(path):
+    payload = fixture("traffic-highway.json")
+    payload["features"][0]["properties"]["LINK_INFO"][0]["path"] = path
+    with pytest.raises(KritsSchemaError, match="path"):
+        parse_traffic(payload, Road("0010", "1", "경부", "highway"), "1")
