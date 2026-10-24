@@ -6,14 +6,14 @@ import asyncio
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import AsyncExitStack, asynccontextmanager
 import math
-from typing import TypeVar
+from typing import Any, TypeVar
 from urllib.parse import urlsplit
 
 from playwright.async_api import (
     BrowserContext,
+    CDPSession,
     Error as PlaywrightError,
     Page,
-    Route,
     async_playwright,
 )
 
@@ -24,17 +24,27 @@ BASE_URL = "https://www.its.go.kr"
 T = TypeVar("T")
 
 
-async def _filter_resource(route: Route) -> None:
-    """수집 페이지에서 외부 지도·영상·이미지 전송을 차단한다."""
-    url = urlsplit(route.request.url)
-    if (
+def _allowed_resource(raw_url: str, resource_type: str) -> bool:
+    """소유 page의 허용 origin·자원 종류를 판정한다."""
+    url = urlsplit(raw_url)
+    return (
         url.scheme == "https"
         and url.netloc == "www.its.go.kr"
-        and route.request.resource_type in {"document", "script", "stylesheet", "xhr", "fetch"}
-    ):
-        await route.continue_()
-    else:
-        await route.abort()
+        and resource_type.lower() in {"document", "script", "stylesheet", "xhr", "fetch"}
+    )
+
+
+async def _intercept_request(session: CDPSession, event: dict[str, Any]) -> None:
+    """리디렉션을 포함한 각 전송 전에 Chromium 요청을 종결한다."""
+    request_id = event["requestId"]
+    try:
+        if _allowed_resource(event["request"]["url"], event["resourceType"]):
+            await session.send("Fetch.continueRequest", {"requestId": request_id})
+        else:
+            await session.send("Fetch.failRequest", {"requestId": request_id, "errorReason": "BlockedByClient"})
+    except PlaywrightError:
+        # page 종료로 자동 detach된 session에는 더 이상 전송할 요청이 없다.
+        return
 
 
 class BrowserSession:
@@ -84,8 +94,29 @@ class BrowserSession:
             context = await self._acquire(
                 browser.new_context(service_workers="block"), lambda value: value.close(),
             )
-        page = await self._acquire(context.new_page(), lambda value: value.close())
-        await page.route("**/*", _filter_resource)
+        session: CDPSession | None = None
+
+        async def close_page(value: Page) -> None:
+            try:
+                await value.close()
+            finally:
+                if session is not None:
+                    session.remove_listener("Fetch.requestPaused", intercept)
+                    try:
+                        await session.detach()
+                    except PlaywrightError:
+                        pass  # page.close가 이미 session을 detach한 경우
+
+        async def intercept(event: dict[str, Any]) -> None:
+            assert session is not None
+            await _intercept_request(session, event)
+
+        page = await self._acquire(context.new_page(), close_page)
+        # page를 닫으면 생성 도중의 CDP session도 함께 해제된다.
+        session = await context.new_cdp_session(page)
+        session.on("Fetch.requestPaused", intercept)
+        await session.send("Network.setBypassServiceWorker", {"bypass": True})
+        await session.send("Fetch.enable", {"patterns": [{"urlPattern": "*", "requestStage": "Request"}]})
         page.set_default_timeout(self.timeout * 1000)
         self._page = page
         return page
@@ -137,23 +168,25 @@ class BrowserSession:
     async def operation(self) -> AsyncIterator[Page]:
         """동시 navigation을 막고 operation마다 공유 예산을 적용한다."""
         self._bind_loop()
-        async with self._lock:
-            if self._closed:
-                raise KritsClosedError("종료된 클라이언트입니다")
-            await self.rate_limiter.acquire()
-            try:
-                async with asyncio.timeout(self.timeout):
-                    yield await self._ensure_page()
-            except BaseException as exc:
-                try:
-                    await self._dispose()
-                except Exception:
-                    self._closed = True
-                    exc.add_note("브라우저 정리가 실패하여 클라이언트를 종료했습니다")
-                if isinstance(exc, (PlaywrightError, TimeoutError)):
-                    # Playwright 원문에는 쿠키·URL 등의 세션 정보가 포함될 수 있다.
-                    raise KritsNetworkError("Chromium 시작 또는 공개 페이지 통신 실패") from None
-                raise
+        try:
+            async with asyncio.timeout(self.timeout):
+                async with self._lock:
+                    if self._closed:
+                        raise KritsClosedError("종료된 클라이언트입니다")
+                    await self.rate_limiter.acquire()
+                    try:
+                        yield await self._ensure_page()
+                    except BaseException as exc:
+                        try:
+                            await self._dispose()
+                        except Exception:
+                            self._closed = True
+                            exc.add_note("브라우저 정리가 실패하여 클라이언트를 종료했습니다")
+                        if isinstance(exc, PlaywrightError):
+                            raise KritsNetworkError("Chromium 시작 또는 공개 페이지 통신 실패") from None
+                        raise
+        except TimeoutError:
+            raise KritsNetworkError("Chromium operation 시간 제한을 초과했습니다") from None
 
     async def aclose(self) -> None:
         """진행 중 operation을 기다린 뒤 소유 자원만 닫는다."""

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import re
 from typing import Literal
 
 from playwright.async_api import BrowserContext
@@ -22,6 +23,15 @@ _PATHS: dict[str, str] = {
     "travel_time": "/map/travelTime",
     "nodelink": "/nodelink/nodelinkRef",
 }
+_CONTAINERS = {
+    "opendata": "a[href='/opendata/opendataList?service=traffic#moveApi']",
+    "nodelink": "#moveData",
+}
+_ACCESS_TITLE = re.compile(r"로그인|보안\s*확인|접근\s*(?:제한|거부)|captcha|access denied", re.I)
+_ACCESS_ELEMENTS = (
+    "input[type='password']:visible, [id*='captcha' i]:visible, "
+    "[class*='captcha' i]:visible, iframe[src*='captcha' i]:visible"
+)
 
 
 class KritsClient:
@@ -82,6 +92,11 @@ class KritsClient:
             if browser_page.url != url:
                 raise KritsAccessError("공개 페이지가 다른 경로로 이동했습니다")
             title = (await browser_page.title()).strip()
+            if _ACCESS_TITLE.search(title) or await browser_page.locator(_ACCESS_ELEMENTS).count():
+                raise KritsAccessError("로그인 또는 보안 확인 화면입니다")
             if "ITS" not in title or "국가교통정보센터" not in title:
                 raise KritsSchemaError("ITS 공개 페이지 제목 계약이 바뀌었습니다")
+            container = _CONTAINERS.get(page, "#map")
+            if not await browser_page.locator(container).count():
+                raise KritsSchemaError("ITS 공개 페이지의 필수 컨테이너가 없습니다")
             return PageSnapshot(source_url=url, title=title, collected_at=datetime.now(timezone.utc))

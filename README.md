@@ -52,12 +52,14 @@ asyncio.run(main())
 페이지 이름은 `opendata`, `traffic`, `outbreak`, `cctv`, `detour`, `travel_time`, `nodelink`다.
 임의 URL은 받지 않는다. 기본 1 RPS/burst=1은 명시적 수집 operation의 예산이며
 페이지가 로드하는 개별 자산의 전송 수 제한은 아니다. 자동 재시도는 없다.
-외부 지도·미디어·이미지 전송을 차단하고 인증 Open API를 호출하지 않는다.
+Chromium CDP에서 소유 page의 HTTP(S) 요청을 redirect의 각 전송 전에 검사해
+외부 지도·미디어·이미지 전송을 차단한다. 인증 Open API를 호출하지 않는다.
 
 브라우저는 첫 호출에서 만들고 `async with` 또는 `await client.aclose()`로 닫는다.
 `browser_context=`를 주입하면 라이브러리는 자신이 만든 page만 닫고 context는 호출자가 닫는다.
 주입 context도 `service_workers="block"`으로 생성하는 것을 권장한다.
-클라이언트·공유 버킷은 같은 이벤트 루프에서 사용한다. `timeout`은 operation의 상한(초)이며
+소유 page에서는 기존 service worker를 우회한다. 다른 page·팝업·WebSocket 수집은 제공하지 않는다.
+클라이언트·공유 버킷은 같은 이벤트 루프에서 사용한다. `timeout`은 lock·버킷 대기를 포함한 operation의 상한(초)이며
 취소·실패 후 자원 정리 시간은 별도다. 종료 후 추가 호출은 `KritsClosedError`다.
 접근 거부·다른 URL 이동, 호출 제한, 네트워크, 화면 구조 오류는 각각
 `KritsAccessError`, `KritsRateLimitError`, `KritsNetworkError`, `KritsSchemaError`로 구분한다.

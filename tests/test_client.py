@@ -11,25 +11,29 @@ from krits import (
     AsyncTokenBucket, KritsAccessError, KritsClient, KritsClosedError,
     KritsNetworkError, KritsRateLimitError, KritsSchemaError,
 )
-from krits._browser import BASE_URL, _filter_resource
+from krits._browser import BASE_URL, _allowed_resource, _intercept_request
 
 
 @pytest.fixture
 def browser(monkeypatch):
     page = SimpleNamespace(
-        route=AsyncMock(), close=AsyncMock(), set_default_timeout=Mock(),
+        close=AsyncMock(), set_default_timeout=Mock(),
         goto=AsyncMock(return_value=SimpleNamespace(status=200)),
         title=AsyncMock(return_value="오픈데이터 | ITS 국가교통정보센터"),
         url=BASE_URL + "/opendata/intro",
     )
-    context = SimpleNamespace(new_page=AsyncMock(return_value=page), close=AsyncMock())
+    page.locator = Mock(side_effect=lambda selector: SimpleNamespace(
+        count=AsyncMock(return_value=0 if ":visible" in selector else 1)))
+    session = SimpleNamespace(send=AsyncMock(), on=Mock(), remove_listener=Mock(), detach=AsyncMock())
+    context = SimpleNamespace(new_page=AsyncMock(return_value=page), close=AsyncMock(),
+                              new_cdp_session=AsyncMock(return_value=session))
     engine = SimpleNamespace(new_context=AsyncMock(return_value=context), close=AsyncMock())
     playwright = SimpleNamespace(chromium=SimpleNamespace(launch=AsyncMock(return_value=engine)),
                                  stop=AsyncMock())
     manager = SimpleNamespace(start=AsyncMock(return_value=playwright))
     monkeypatch.setattr("krits._browser.async_playwright", lambda: manager)
     return SimpleNamespace(page=page, context=context, engine=engine, playwright=playwright,
-                           manager=manager)
+                           manager=manager, session=session)
 
 
 async def test_lazy_snapshot_and_owned_cleanup(browser):
@@ -111,6 +115,30 @@ async def test_login_redirect_is_not_success(browser):
 
 async def test_schema_error_is_not_empty_result(browser):
     browser.page.title.return_value = "서비스 점검"
+    async with KritsClient() as client:
+        with pytest.raises(KritsSchemaError):
+            await client.get_page_snapshot()
+
+
+@pytest.mark.parametrize("title", ["보안 확인 | ITS 국가교통정보센터", "로그인 | ITS 국가교통정보센터"])
+async def test_http_200_access_screen_is_rejected(browser, title):
+    browser.page.title.return_value = title
+    async with KritsClient() as client:
+        with pytest.raises(KritsAccessError):
+            await client.get_page_snapshot()
+
+
+async def test_captcha_element_is_rejected(browser):
+    browser.page.locator.return_value = SimpleNamespace(count=AsyncMock(return_value=1))
+    browser.page.locator.side_effect = None
+    async with KritsClient() as client:
+        with pytest.raises(KritsAccessError):
+            await client.get_page_snapshot()
+
+
+async def test_missing_normal_container_is_schema_error(browser):
+    browser.page.locator.side_effect = None
+    browser.page.locator.return_value = SimpleNamespace(count=AsyncMock(return_value=0))
     async with KritsClient() as client:
         with pytest.raises(KritsSchemaError):
             await client.get_page_snapshot()
@@ -280,6 +308,36 @@ async def test_operations_and_close_are_serialized(browser):
     browser.manager.start.assert_awaited_once()
 
 
+async def test_limiter_wait_respects_operation_timeout_without_disposing_idle_page(browser):
+    client = KritsClient(timeout=0.1, max_rps=0.01)
+    await client.get_page_snapshot()
+    with pytest.raises(KritsNetworkError, match="시간 제한"):
+        await asyncio.wait_for(client.get_page_snapshot(), 1)
+    browser.page.close.assert_not_awaited()
+    await client.aclose()
+
+
+async def test_lock_wait_timeout_does_not_close_other_operation_page(browser):
+    started, release = asyncio.Event(), asyncio.Event()
+
+    async def slow_goto(*args, **kwargs):
+        started.set()
+        await release.wait()
+        return SimpleNamespace(status=200)
+
+    browser.page.goto.side_effect = slow_goto
+    client = KritsClient(timeout=10)
+    first = asyncio.create_task(client.get_page_snapshot())
+    await started.wait()
+    client._browser.timeout = 0.01
+    with pytest.raises(KritsNetworkError, match="시간 제한"):
+        await asyncio.wait_for(client.get_page_snapshot(), 1)
+    browser.page.close.assert_not_awaited()
+    release.set()
+    await first
+    await client.aclose()
+
+
 def test_client_cannot_cross_event_loops(browser):
     client = KritsClient()
     asyncio.run(client.aclose())
@@ -297,8 +355,30 @@ def test_client_cannot_cross_event_loops(browser):
     ("https://www.its.go.kr:9443/tiles", "fetch", False),
 ])
 async def test_resource_filter(url, kind, allowed):
-    route = SimpleNamespace(request=SimpleNamespace(url=url, resource_type=kind),
-                            continue_=AsyncMock(), abort=AsyncMock())
-    await _filter_resource(route)
-    assert route.continue_.await_count == int(allowed)
-    assert route.abort.await_count == int(not allowed)
+    assert _allowed_resource(url, kind) is allowed
+    session = SimpleNamespace(send=AsyncMock())
+    await _intercept_request(session, {"requestId": "1", "request": {"url": url}, "resourceType": kind})
+    assert session.send.call_args.args[0] == ("Fetch.continueRequest" if allowed else "Fetch.failRequest")
+
+
+async def test_closed_cdp_session_does_not_leave_unhandled_exception():
+    session = SimpleNamespace(send=AsyncMock(side_effect=PlaywrightError("closed")))
+    await _intercept_request(session, {"requestId": "1", "request": {"url": BASE_URL}, "resourceType": "Document"})
+
+
+async def test_cdp_handler_is_removed_and_session_detached_with_owned_page(browser):
+    client = KritsClient()
+    await client.get_page_snapshot()
+    callback = browser.session.on.call_args.args[1]
+    await callback({"requestId": "1", "request": {"url": BASE_URL}, "resourceType": "Document"})
+    await client.aclose()
+    browser.session.remove_listener.assert_called_once_with("Fetch.requestPaused", callback)
+    browser.session.detach.assert_awaited_once()
+    assert browser.context.close.await_count == 1
+
+
+async def test_automatic_detach_on_closed_page_is_safe(browser):
+    browser.session.detach.side_effect = PlaywrightError("already detached")
+    async with KritsClient() as client:
+        await client.get_page_snapshot()
+    browser.context.close.assert_awaited_once()
