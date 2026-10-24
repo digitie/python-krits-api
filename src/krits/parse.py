@@ -306,6 +306,8 @@ def parse_weak_files(value: object) -> tuple[FileAttachment, ...]:
 
 def _node_rows(value: object) -> list[dict[str, Any]]:
     rows = [_object(row, "노드링크 배포") for row in _list(_data(value).get("fileVOList"), "fileVOList")]
+    if any("updtCn" not in row for row in rows):
+        raise KritsSchemaError("노드링크 배포 설명 필드가 누락됐습니다")
     for key in ("seq", "atchFileId"):
         ids = [_text(row.get(key), key) for row in rows]
         if len(ids) != len(set(ids)):
@@ -365,7 +367,7 @@ def parse_nodelink_releases(value: object, links: object) -> tuple[NodeLinkRelea
             files[prefix] = FileAttachment("nodelink", group, sequence, name, url, None,
                                            {**row, "role": prefix})
             offset += 1
-        result.append(NodeLinkRelease(row["seq"], group, _optional_text(row.get("updtCn"), "updtCn"),
+        result.append(NodeLinkRelease(row["seq"], group, _optional_text(row["updtCn"], "updtCn"),
                                       files.get("node"), files.get("hist"), dict(row)))
     return tuple(result)
 

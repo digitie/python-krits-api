@@ -28,6 +28,9 @@
 | `updtCn` | `description` | 배포 설명·주의사항 원문 |
 | `regDt/registDt`, 나머지 | `raw` | 시각 의미/시간대 추정 없이 보존 |
 
+`updtCn` 키 자체는 필수다. 명시적 null/공백이면 `description=None`이지만 키가 사라지면
+부분 배포 등 중요한 경고를 유실했을 수 있어 오류로 중단한다.
+
 ID는 문자열이다. `atchFileId`를 `DF_`와 `seq`의 조합으로 만들지 않는다. 첨부번호도 0/1로
 고정하지 않는다. 실제 최근 기간에 `DF_211`의 node=5/hist=6, `DF_210`의 node=1/hist=2를 확인했다.
 DOM href `/opendata/nodelinkFileSDownload/<atchFileId>/<fileSeq>` 자체를 사용하며

@@ -64,6 +64,16 @@ def test_explicit_absence_inconsistent_metadata_and_no_files():
     with pytest.raises(KritsSchemaError): nodelink_dom_ids(d)
 
 
+def test_partial_release_description_missing_is_not_explicit_null():
+    d=fixture('nodelink-partial');row=d['body']['data']['fileVOList'][0]
+    del row['updtCn']
+    with pytest.raises(KritsSchemaError): nodelink_dom_ids(d)
+    with pytest.raises(KritsSchemaError): parse_nodelink_releases(d,fixture('nodelink-partial-links'))
+    for value in (None,'','   '):
+        row['updtCn']=value
+        assert parse_nodelink_releases(d,fixture('nodelink-partial-links'))[0].description is None
+
+
 @pytest.mark.parametrize('field,value', [('id','NODE_DF_999'),('sequence','1'),('name','other.zip'),
     ('href','/opendata/nodelinkFileSDownload/DF_999/0'),
     ('href','https://other.invalid/a.zip'),('href','/opendata/nodelinkFileSDownload/DF_221/0?key=x')])
