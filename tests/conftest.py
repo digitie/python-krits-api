@@ -33,6 +33,8 @@ def browser(monkeypatch):
 
 def pytest_addoption(parser):
     parser.addoption("--run-live", action="store_true", help="실제 Chromium/ITS E2E 실행")
+    parser.addoption("--run-large-files", action="store_true", help="전체 노드링크 ZIP 전송/검사 opt-in")
+    parser.addoption("--file-store", default=None, help="대용량 원본을 재사용할 저장소 밖 FileStore 경로")
 
 
 def pytest_collection_modifyitems(config, items):
@@ -40,4 +42,9 @@ def pytest_collection_modifyitems(config, items):
         marker = pytest.mark.skip(reason="--run-live를 지정해야 외부 네트워크를 사용합니다")
         for item in items:
             if "live" in item.keywords:
+                item.add_marker(marker)
+    if not config.getoption("--run-large-files"):
+        marker = pytest.mark.skip(reason="전체 ZIP은 --run-large-files로 별도 opt-in해야 합니다")
+        for item in items:
+            if "large_file" in item.keywords:
                 item.add_marker(marker)
