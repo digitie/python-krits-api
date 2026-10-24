@@ -195,3 +195,20 @@ async def test_zip_preflight_rejects_concat_directory_before_zipfile_allocation(
     def forbidden(*_args,**_kwargs):raise AssertionError('ZipFile allocation before preflight rejection')
     monkeypatch.setattr('krits.formats.zipfile.ZipFile',forbidden)
     with pytest.raises(KritsIntegrityError):await inspect_file(store,stored,limits=FileLimits(max_entries=1))
+
+
+async def test_zip64_locator_without_sentinel_cannot_override_preflight_directory(tmp_path,monkeypatch):
+    original=bytearray(archive_bytes([('a',b'1'),('b',b'2')]))
+    central=original.find(b'PK\x01\x02');end=original.rfind(b'PK\x05\x06')
+    fake=bytearray(original[central:central+46])
+    # 위조1개항목의 comment 안에 실제2개directory와 ZIP64종료구조를 넣는다.
+    struct.pack_into('<3H',fake,28,1,0,end+76)
+    zip64=struct.pack('<4sQHHIIQQQQ',b'PK\x06\x06',44,45,45,0,0,2,2,end-central,47+central)
+    locator=struct.pack('<4sIQI',b'PK\x06\x07',0,47+end,1)
+    eocd=bytearray(original[end:]);struct.pack_into('<HHII',eocd,8,1,1,47+end+76,0)
+    data=bytes(fake+b'q'+original[:end]+zip64+locator+eocd)
+    with zipfile.ZipFile(io.BytesIO(data)) as parser:assert len(parser.infolist())==2
+    store,stored=stored_file(tmp_path,data)
+    def forbidden(*_args,**_kwargs):raise AssertionError('ZIP64 ZipFile allocation before rejection')
+    monkeypatch.setattr('krits.formats.zipfile.ZipFile',forbidden)
+    with pytest.raises(KritsIntegrityError):await inspect_file(store,stored,limits=FileLimits(max_entries=1))

@@ -34,6 +34,8 @@ ZIP은 `ZipFile` 객체를 만들기 전에 EOCD·central directory 길이와 �
 지원 압축은 stored/deflate이며 다중 디스크와 ZIP64 EOCD는 현재 명시적 미지원이다.
 central directory는 EOCD 바로 앞의 정확한 선언 위치여야 한다. 다른 영역을 읽게 만드는
 concat offset 보정·directory와 EOCD 사이의 미지원 추가 레코드는 거부한다.
+일반 EOCD의 sentinel 값이 없어도 직전 ZIP64 locator는 선제 거부한다. 표준 zipfile이
+별도 ZIP64 directory로 교체해 사전검사와 다른 영역을 읽는 우회를 허용하지 않는다.
 ZIP64 멤버의 크기 표현은 EOCD가 일반 형식이고 모든 상한을 만족하면 표준 zipfile이 처리한다.
 ZIP 안의 모든 멤버를64KiB씩 EOF까지 읽어 선언 길이와 CRC를 확인한다.
 [Python zipfile](https://docs.python.org/3/library/zipfile.html)의 CRC 검사를 사용하되

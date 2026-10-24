@@ -74,10 +74,15 @@ def _preflight(path: Path, limits: FileLimits) -> None:
         if end[1] or end[2] or end[3] != end[4] or position + 22 + end[7] != len(tail):
             raise _fail("다중 디스크 또는 비정상 ZIP 종료 레코드입니다")
         count, directory_size, offset = end[4], end[5], end[6]
+        eocd_offset = size - len(tail) + position
+        if eocd_offset >= 20:
+            source.seek(eocd_offset - 20)
+            if source.read(4) == b"PK\x06\x07":
+                raise _fail("ZIP64 locator는 일반 EOCD sentinel과 관계없이 지원하지 않습니다")
         if count == 65535 or directory_size == 0xFFFFFFFF or offset == 0xFFFFFFFF:
             raise _fail("ZIP64 EOCD는 현재 검사 계약에서 지원하지 않습니다")
         if (count > limits.max_entries or directory_size > limits.max_directory_bytes
-                or offset + directory_size != size - len(tail) + position):
+                or offset + directory_size != eocd_offset):
             raise _fail("ZIP central directory 상한 또는 범위가 잘못됐습니다")
         source.seek(offset); directory_end = offset + directory_size; actual = 0
         while source.tell() < directory_end:
