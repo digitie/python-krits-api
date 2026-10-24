@@ -55,6 +55,8 @@ class RequestCache:
         self.closed = False
         self._entries: OrderedDict[Hashable, tuple[float, object]] = OrderedDict()
         self._flights: dict[Hashable, _Flight] = {}
+        self._retiring: dict[Hashable, asyncio.Task[object]] = {}
+        self._tasks: set[asyncio.Task[object]] = set()
         self._generation = 0
 
     def clear(self) -> None:
@@ -74,10 +76,17 @@ class RequestCache:
         flight = self._flights.get(key)
         if flight is None:
             generation = self._generation
+            retiring = self._retiring.get(key)
 
             async def produce() -> object:
+                if retiring is not None:
+                    await _settle(retiring)
+                    current = asyncio.current_task()
+                    if current is not None and current.cancelling():
+                        raise asyncio.CancelledError
                 value = await fetch()
-                if self.ttl > 0 and not self.closed and generation == self._generation:
+                if (self.ttl > 0 and not self.closed and generation == self._generation
+                        and self._flights.get(key) is flight):
                     self._entries[key] = (time.monotonic() + self.ttl, _copy(value))
                     self._entries.move_to_end(key)
                     while len(self._entries) > self.max_entries:
@@ -86,10 +95,14 @@ class RequestCache:
 
             flight = _Flight(asyncio.create_task(produce()))
             self._flights[key] = flight
+            self._tasks.add(flight.task)
 
             def done(task: asyncio.Task[object]) -> None:
                 if self._flights.get(key) is flight:
                     del self._flights[key]
+                if self._retiring.get(key) is task:
+                    del self._retiring[key]
+                self._tasks.discard(task)
                 if not task.cancelled():
                     task.exception()
 
@@ -100,13 +113,16 @@ class RequestCache:
         finally:
             flight.waiters -= 1
             if flight.waiters == 0 and not flight.task.done():
+                if self._flights.get(key) is flight:
+                    del self._flights[key]
+                self._retiring[key] = flight.task
                 flight.task.cancel()
                 await _settle(flight.task)
 
     async def aclose(self) -> None:
         """진행 중 조회를 완료하고 보관한 값만 제거한다."""
         self.closed = True
-        pending = tuple(flight.task for flight in self._flights.values())
+        pending = tuple(self._tasks)
         try:
             if pending:
                 joined = asyncio.gather(*pending, return_exceptions=True)

@@ -151,3 +151,40 @@ async def test_cached_success_never_hides_late_first_party_denial(browser,monkey
         with pytest.raises(KritsRateLimitError):await c.get_events()
         fetch.assert_awaited_once()
         assert not c._query_cache._entries
+
+
+async def test_new_caller_waits_cancelled_cleanup_then_starts_fresh_request():
+    cache=RequestCache(15,2);started=asyncio.Event();cleaning=asyncio.Event();release=asyncio.Event();calls=0
+    async def fetch():
+        nonlocal calls
+        calls+=1
+        if calls==1:
+            try:started.set();await asyncio.Event().wait()
+            finally:cleaning.set();await release.wait()
+        return [calls]
+    first=asyncio.create_task(cache.get('a',fetch));await started.wait();first.cancel();await cleaning.wait()
+    fresh=asyncio.create_task(cache.get('a',fetch));await asyncio.sleep(0)
+    assert not fresh.done() and calls==1
+    release.set()
+    with pytest.raises(asyncio.CancelledError):await first
+    assert await fresh==[2] and calls==2
+    assert await cache.get('a',fetch)==[2] and calls==2
+    await cache.aclose()
+
+
+async def test_cancelled_replacement_and_close_still_wait_retiring_cleanup():
+    cache=RequestCache(15,2);started=asyncio.Event();cleaning=asyncio.Event();release=asyncio.Event();calls=0
+    async def fetch():
+        nonlocal calls
+        calls+=1
+        try:started.set();await asyncio.Event().wait()
+        finally:cleaning.set();await release.wait()
+    first=asyncio.create_task(cache.get('a',fetch));await started.wait();first.cancel();await cleaning.wait()
+    replacement=asyncio.create_task(cache.get('a',fetch));await asyncio.sleep(0);await asyncio.sleep(0)
+    replacement.cancel();await asyncio.sleep(0)
+    closing=asyncio.create_task(cache.aclose());await asyncio.sleep(0)
+    assert not closing.done() and calls==1
+    release.set()
+    results=await asyncio.gather(first,replacement,return_exceptions=True)
+    assert all(isinstance(r,asyncio.CancelledError) for r in results)
+    await closing;assert not cache._tasks and not cache._retiring
