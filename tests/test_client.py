@@ -286,12 +286,18 @@ async def test_operations_and_close_are_serialized(browser):
     browser.manager.start.assert_awaited_once()
 
 
-async def test_limiter_wait_respects_operation_timeout_without_disposing_idle_page(browser):
+async def test_wire_limiter_wait_respects_timeout_and_aborts_paused_request(browser):
+    async def goto(url, **_kwargs):
+        callback = browser.session.on.call_args.args[1]
+        await callback({"requestId":"1", "request":{"url":url}, "resourceType":"Document"})
+        return SimpleNamespace(status=200)
+
+    browser.page.goto.side_effect = goto
     client = KritsClient(timeout=0.1, max_rps=0.01)
     await client.get_page_snapshot()
     with pytest.raises(KritsNetworkError, match="시간 제한"):
         await asyncio.wait_for(client.get_page_snapshot(), 1)
-    browser.page.close.assert_not_awaited()
+    browser.page.close.assert_awaited_once()
     await client.aclose()
 
 
@@ -359,4 +365,56 @@ async def test_automatic_detach_on_closed_page_is_safe(browser):
     browser.session.detach.side_effect = PlaywrightError("already detached")
     async with KritsClient() as client:
         await client.get_page_snapshot()
+    browser.context.close.assert_awaited_once()
+
+
+async def test_paused_wire_waiters_cancel_before_page_close(browser):
+    client=KritsClient(max_rps=0.01)
+    await client.get_page_snapshot()
+    callback=browser.session.on.call_args.args[1]
+    event={"requestId":"1","request":{"url":BASE_URL},"resourceType":"Document"}
+    await callback(event)
+    waiting=callback({**event,"requestId":"2"})
+    await asyncio.sleep(0)
+    assert not waiting.done()
+    await client.aclose()
+    assert waiting.cancelled()
+    browser.page.close.assert_awaited_once()
+
+
+async def test_shared_bucket_loop_mismatch_fails_before_browser_start(browser):
+    bucket=AsyncTokenBucket();bucket._loop=object()
+    async with KritsClient(rate_limiter=bucket) as client:
+        with pytest.raises(RuntimeError,match='single event loop'):await client.get_page_snapshot()
+    browser.manager.start.assert_not_awaited()
+
+
+async def test_blocked_resource_never_consumes_token():
+    session=SimpleNamespace(send=AsyncMock());bucket=SimpleNamespace(acquire=AsyncMock())
+    await _intercept_request(session,{"requestId":"1","request":{"url":"https://openapi.its.go.kr/a"},"resourceType":"Fetch"},bucket)
+    bucket.acquire.assert_not_awaited()
+    await _intercept_request(session,{"requestId":"2","request":{"url":BASE_URL},"resourceType":"Document"},bucket)
+    bucket.acquire.assert_awaited_once()
+
+
+async def test_denial_while_waiting_for_token_never_continues_request():
+    blocked=[False]
+    async def acquire():blocked[0]=True
+    session=SimpleNamespace(send=AsyncMock());bucket=SimpleNamespace(acquire=AsyncMock(side_effect=acquire))
+    event={"requestId":"1","request":{"url":BASE_URL},"resourceType":"Document"}
+    await _intercept_request(session,event,bucket,lambda:blocked[0])
+    assert session.send.call_args.args[0]=='Fetch.failRequest'
+    await _intercept_request(session,event,bucket,lambda:True)
+    bucket.acquire.assert_awaited_once()
+
+
+@pytest.mark.parametrize('status,error',[(401,KritsAccessError),(403,KritsAccessError),(429,KritsRateLimitError)])
+async def test_idle_asset_denial_is_not_ignored_on_next_operation(browser,status,error):
+    async with KritsClient() as c:
+        await c.get_page_snapshot()
+        observe=browser.page.on.call_args.args[1]
+        observe(SimpleNamespace(status=200,url=BASE_URL,request=SimpleNamespace(resource_type='document')))
+        observe(SimpleNamespace(status=status,url=BASE_URL+'/css/main.css',request=SimpleNamespace(resource_type='stylesheet')))
+        await asyncio.sleep(0)
+        with pytest.raises(error):await c.get_page_snapshot()
     browser.context.close.assert_awaited_once()

@@ -12,6 +12,10 @@ T002부터 compileall, mypy, pytest coverage 90%, build를 CI에 둔다.
 파일 단계는 크기 초과·길이 불일치·HTML 로그인·중단 전송·취소·경로 이탈·동시 저장·
 checksum 불일치·기존 정상본 유지·ZIP traversal/bomb/CRC를 검증한다.
 
+T006A는 TTL/LRU/동일 진행 조회 공유·실패 미보관·복사·반복 취소·종료를 검증한다.
+localhost 실제 Chromium 서버의 카운터로 전송 단위 공통 버킷, 캐시 적중0회, 동일 조회1회,
+접근 거부 재시도0회를 확인한다. 전체 ITS live와 로컬 회귀의 수를 따로 기록한다.
+
 ## 실제 Chromium live E2E
 
 T001은 공개 화면 열기 → 동적 데이터/자료실 첨부 확인까지 검증한다.

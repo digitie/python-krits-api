@@ -71,8 +71,9 @@ asyncio.run(main())
 `KritsProviderError`다. 정상 빈 FeatureCollection만 빈 `items`로 반환한다.
 
 페이지 이름은 `opendata`, `traffic`, `outbreak`, `cctv`, `detour`, `travel_time`, `nodelink`다.
-임의 URL은 받지 않는다. 기본 1 RPS/burst=1은 명시적 수집 operation의 예산이며
-페이지가 로드하는 개별 자산의 전송 수 제한은 아니다. 자동 재시도는 없다.
+임의 URL은 받지 않는다. 기본 5 RPS/burst=1의 공통 버킷은 허용된 문서·스크립트·스타일·
+데이터와 각 redirect 전송에 적용한다. 여러 클라이언트에 같은 버킷을 주입할 수 있다.
+차단된 자원·인자 검증 실패·캐시 적중에는 토큰을 쓰지 않는다. 자동 재시도는 없다.
 Chromium CDP에서 소유 page의 HTTP(S) 요청을 redirect의 각 전송 전에 검사해
 외부 지도·미디어·이미지 전송을 차단한다. 인증 Open API를 호출하지 않는다.
 
@@ -88,6 +89,11 @@ Chromium CDP에서 소유 page의 HTTP(S) 요청을 redirect의 각 전송 전�
 기존 Chromium을 사용하려면 `KritsClient(executable_path="...")`를 지정한다.
 기본 동작은 Playwright가 설치한 Chromium이며 환경변수를 자동 탐색하지 않는다.
 live 테스트/조사 도구만 `KRITS_CHROMIUM_EXECUTABLE`을 선택적으로 읽는다.
+
+기본 조회 캐시는 TTL15초/최대32항목이다. 동일한 진행 조회는 한 번만 전송하며 실패는 저장하지 않는다.
+반환 수집 시각은 원래 조회 시각을 유지한다. `cache_ttl=0`으로 완료 캐시를 끄거나
+`client.clear_cache()`로 완료 값만 비울 수 있다. 진단용 `get_page_snapshot`은 항상 실제로 탐색한다.
+기본 timeout은 자산 전송 대기도 포함해 90초다. 상세는 [서버부하 정책](docs/load-control.md)을 따른다.
 
 ## 개발 검증
 

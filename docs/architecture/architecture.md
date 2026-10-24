@@ -18,6 +18,7 @@ ITS 공개 자료실 ─ Chromium 발견 ─ 첨부 다운로드 ─ 형식/크�
 | `client.py` | `KritsClient`, 공개 조회 메서드·입력 검증 | browser, parse, models |
 | `_browser.py` | Playwright async Chromium, 소유권·직렬 operation·종료 | ratelimit, exceptions |
 | `_ratelimit.py` | 한 루프의 공유 `AsyncTokenBucket` | asyncio/time |
+| `_cache.py` | 제한된 성공 결과 TTL/LRU·진행 조회 공유·취소 정리 | asyncio, exceptions |
 | `models.py` | frozen dataclass, 출처·수집 시각·범위·원시 필드 | 표준 라이브러리 |
 | `parse.py` | JSON/DOM 레코드의 엄격 검증·타입 변환 | models, exceptions |
 | 파일 목록(`client.py/parse.py`) | 기간 검색·실제 DOM 첨부 발견·자료실 관찰 차이 | browser, models |
@@ -36,10 +37,13 @@ lock·버킷 대기는 operation timeout에 포함하고, 자원을 아직 사�
 진행 중인 다른 operation의 page를 닫지 않도록 한다. 자원 생성 도중 취소 시 생성 결과를
 받아 cleanup에 등록한 후 취소를 전파한다.
 
-기본 수집 operation은 1 RPS, burst capacity=1, 자동 재시도 0이다. 공유 버킷을 주입할 수 있다.
-이 제한은 명시적 수집 operation의 예산이며 브라우저가 로드하는 모든 자산의 초당 전송 수를
-보장하지 않는다. 타일·영상·분석 자산을 불필요하게 전송하지 않도록 단계별로 차단한다.
-서비스의 실제 호출 제한을 무시하거나 보장하는 설정이 아니다.
+기본 전송 예산은 5 RPS, burst capacity=1, 자동 재시도 0이다. 같은 버킷을 여러 클라이언트에
+주입할 수 있다. CDP request 단계에서 허용된 문서·스크립트·스타일·데이터·각 redirect 전송에
+토큰을 적용한다. 차단 요청은 토큰 없이 종결한다. page 종료 전에 토큰 대기 task도 취소·회수한다.
+타일·영상·분석 자산은 차단한다. 실제 서버의 허용 한도를 무시하거나 보장하는 설정은 아니다.
+성공 조회에는 기본 TTL15초/32항목 LRU를 적용하고 같은 진행 요청을 공유한다. 캐시 결과는
+복사해 반환하며 원래 수집 시각을 유지한다. 실패는 저장하지 않고 마지막 대기자 취소 시 실제
+조회 task와 그 자원 정리를 완료한다. [자세한 정책](../load-control.md)을 따른다.
 
 ## 모델
 

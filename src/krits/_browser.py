@@ -14,11 +14,12 @@ from playwright.async_api import (
     CDPSession,
     Error as PlaywrightError,
     Page,
+    Response,
     async_playwright,
 )
 
 from ._ratelimit import AsyncTokenBucket
-from .exceptions import KritsClosedError, KritsNetworkError
+from .exceptions import KritsAccessError, KritsClosedError, KritsNetworkError, KritsRateLimitError
 
 BASE_URL = "https://www.its.go.kr"
 T = TypeVar("T")
@@ -34,12 +35,20 @@ def _allowed_resource(raw_url: str, resource_type: str) -> bool:
     )
 
 
-async def _intercept_request(session: CDPSession, event: dict[str, Any]) -> None:
+async def _intercept_request(
+    session: CDPSession, event: dict[str, Any], rate_limiter: AsyncTokenBucket | None = None,
+    blocked: Callable[[], bool] | None = None,
+) -> None:
     """리디렉션을 포함한 각 전송 전에 Chromium 요청을 종결한다."""
     request_id = event["requestId"]
     try:
-        if _allowed_resource(event["request"]["url"], event["resourceType"]):
-            await session.send("Fetch.continueRequest", {"requestId": request_id})
+        if _allowed_resource(event["request"]["url"], event["resourceType"]) and not (blocked and blocked()):
+            if rate_limiter is not None:
+                await rate_limiter.acquire()
+            if blocked and blocked():
+                await session.send("Fetch.failRequest", {"requestId": request_id, "errorReason": "BlockedByClient"})
+            else:
+                await session.send("Fetch.continueRequest", {"requestId": request_id})
         else:
             await session.send("Fetch.failRequest", {"requestId": request_id, "errorReason": "BlockedByClient"})
     except PlaywrightError:
@@ -72,6 +81,13 @@ class BrowserSession:
         self._lock = asyncio.Lock()
         self._loop: asyncio.AbstractEventLoop | None = None
         self._closed = False
+        self._denied_status: int | None = None
+
+    def _raise_denial(self) -> None:
+        if self._denied_status == 429:
+            raise KritsRateLimitError("공개 웹 호출 제한입니다")
+        if self._denied_status in (401, 403):
+            raise KritsAccessError("공개 웹 접근이 거부됐습니다")
 
     def _bind_loop(self) -> None:
         loop = asyncio.get_running_loop()
@@ -84,6 +100,7 @@ class BrowserSession:
         if self._page is not None:
             return self._page
         self._stack = AsyncExitStack()
+        self._denied_status = None
         context = self._external_context
         if context is None:
             playwright = await self._acquire(async_playwright().start(), lambda value: value.stop())
@@ -95,23 +112,56 @@ class BrowserSession:
                 browser.new_context(service_workers="block"), lambda value: value.close(),
             )
         session: CDPSession | None = None
+        pending: set[asyncio.Task[None]] = set()
+        page: Page | None = None
+        denial_closer: asyncio.Task[None] | None = None
+
+        def observe_denial(response: Response) -> None:
+            nonlocal denial_closer
+            if response.status in (401, 403, 429) and _allowed_resource(response.url, response.request.resource_type):
+                self._denied_status = self._denied_status or response.status
+                if page is not None and denial_closer is None:
+                    denial_closer = asyncio.create_task(page.close())
+                    denial_closer.add_done_callback(lambda task: None if task.cancelled() else task.exception())
 
         async def close_page(value: Page) -> None:
             try:
+                value.remove_listener("response", observe_denial)
+                if session is not None:
+                    session.remove_listener("Fetch.requestPaused", intercept)
+                for task in tuple(pending):
+                    task.cancel()
+                if pending:
+                    await asyncio.gather(*pending, return_exceptions=True)
+                if denial_closer is not None:
+                    try:
+                        await denial_closer
+                    except PlaywrightError:
+                        pass
                 await value.close()
             finally:
                 if session is not None:
-                    session.remove_listener("Fetch.requestPaused", intercept)
                     try:
                         await session.detach()
                     except PlaywrightError:
                         pass  # page.close가 이미 session을 detach한 경우
 
-        async def intercept(event: dict[str, Any]) -> None:
+        def intercept(event: dict[str, Any]) -> asyncio.Task[None]:
             assert session is not None
-            await _intercept_request(session, event)
+            task = asyncio.create_task(_intercept_request(session, event, self.rate_limiter,
+                                                        lambda: self._denied_status is not None))
+            pending.add(task)
+
+            def done(finished: asyncio.Task[None]) -> None:
+                pending.discard(finished)
+                if not finished.cancelled():
+                    finished.exception()
+
+            task.add_done_callback(done)
+            return task
 
         page = await self._acquire(context.new_page(), close_page)
+        page.on("response", observe_denial)
         # page를 닫으면 생성 도중의 CDP session도 함께 해제된다.
         session = await context.new_cdp_session(page)
         session.on("Fetch.requestPaused", intercept)
@@ -166,26 +216,32 @@ class BrowserSession:
 
     @asynccontextmanager
     async def operation(self) -> AsyncIterator[Page]:
-        """동시 navigation을 막고 operation마다 공유 예산을 적용한다."""
+        """동시 navigation을 막는다. 각 실제 전송은 CDP 경계에서 공통 예산을 쓴다."""
         self._bind_loop()
+        self.rate_limiter._bind_loop()
         try:
             async with asyncio.timeout(self.timeout):
                 async with self._lock:
                     if self._closed:
                         raise KritsClosedError("종료된 클라이언트입니다")
-                    await self.rate_limiter.acquire()
                     try:
-                        yield await self._ensure_page()
+                        page = await self._ensure_page()
+                        self._raise_denial()
+                        yield page
+                        self._raise_denial()
                     except BaseException as exc:
                         try:
                             await self._dispose()
                         except Exception:
                             self._closed = True
                             exc.add_note("브라우저 정리가 실패하여 클라이언트를 종료했습니다")
+                        if not isinstance(exc, asyncio.CancelledError):
+                            self._raise_denial()
                         if isinstance(exc, PlaywrightError):
                             raise KritsNetworkError("Chromium 시작 또는 공개 페이지 통신 실패") from None
                         raise
         except TimeoutError:
+            self._raise_denial()
             raise KritsNetworkError("Chromium operation 시간 제한을 초과했습니다") from None
 
     async def aclose(self) -> None:

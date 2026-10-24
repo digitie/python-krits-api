@@ -15,6 +15,7 @@ def browser(monkeypatch):
         goto=AsyncMock(return_value=SimpleNamespace(status=200)),
         title=AsyncMock(return_value="오픈데이터 | ITS 국가교통정보센터"),
         url=BASE_URL + "/opendata/intro",
+        on=Mock(), remove_listener=Mock(),
     )
     page.locator = Mock(side_effect=lambda selector: SimpleNamespace(
         count=AsyncMock(return_value=0 if ":visible" in selector else 1)))

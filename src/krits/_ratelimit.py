@@ -43,13 +43,17 @@ class AsyncTokenBucket:
         """최대로 저장할 토큰 수."""
         return self._capacity
 
-    async def acquire(self) -> None:
-        """요청 하나에 필요한 토큰이 생길 때까지 비동기로 대기한다."""
+    def _bind_loop(self) -> None:
+        """전송을 시작하기 전에도 공유 버킷의 루프 소유권을 확인한다."""
         loop = asyncio.get_running_loop()
         if self._loop is None:
             self._loop = loop
         elif self._loop is not loop:
             raise RuntimeError("AsyncTokenBucket must be used on a single event loop")
+
+    async def acquire(self) -> None:
+        """요청 하나에 필요한 토큰이 생길 때까지 비동기로 대기한다."""
+        self._bind_loop()
         # 선두 호출만 충전을 기다린다. asyncio.Lock의 FIFO/취소 처리를 사용해
         # 별도 timer나 Future 큐 없이 후속 호출의 진행을 보장한다.
         async with self._lock:
