@@ -59,6 +59,28 @@ def _count(value: object, name: str) -> int:
     return value
 
 
+def _path(value: object) -> tuple[tuple[float, float], ...]:
+    """공개 웹에서 EPSG:4326으로 표시하는 개별 링크의 (경도, 위도)를 검증한다."""
+    if value is None:
+        return ()
+    if not isinstance(value, list) or not 2 <= len(value) <= 20_000:
+        raise KritsSchemaError("path: 2~20,000개 좌표가 필요합니다")
+    result: list[tuple[float, float]] = []
+    for point in value:
+        if not isinstance(point, list) or len(point) != 2:
+            raise KritsSchemaError("path: 경도·위도 쌍이 필요합니다")
+        if any(isinstance(item, bool) or not isinstance(item, (int, float)) for item in point):
+            raise KritsSchemaError("path: 좌표는 숫자여야 합니다")
+        try:
+            longitude, latitude = float(point[0]), float(point[1])
+        except OverflowError:
+            raise KritsSchemaError("path: 좌표 범위 초과") from None
+        if not math.isfinite(longitude) or not math.isfinite(latitude) or not -180 <= longitude <= 180 or not -90 <= latitude <= 90:
+            raise KritsSchemaError("path: EPSG:4326 좌표 범위를 벗어났습니다")
+        result.append((longitude, latitude))
+    return tuple(result)
+
+
 def _features(value: object, name: str) -> list[Any]:
     collection = _object(value, name)
     rows = collection.get("features")
@@ -118,7 +140,7 @@ def parse_traffic(value: object, road: Road, direction: str) -> tuple[TrafficSec
                 raise KritsSchemaError("개별 링크 속도 필드가 없습니다")
             speed = None if link["PASNG_SPED"] is None else _number(link["PASNG_SPED"], "PASNG_SPED")
             links.append(TrafficLink(_text(link.get("LINK_ID"), "LINK_ID"), direction, speed,
-                                     _number(link.get("LENGTH"), "LENGTH"), dict(link)))
+                                     _number(link.get("LENGTH"), "LENGTH"), dict(link), _path(link.get("path"))))
         if highway and info.get("LINK_ID") != [link.link_id for link in links]:
             raise KritsSchemaError("집계 LINK_ID 순서와 개별 링크가 일치하지 않습니다")
         result.append(TrafficSection(section_id, _text(info.get(name_key), name_key), direction,

@@ -64,7 +64,10 @@ async def test_redirect_each_hop_is_filtered_before_network(monkeypatch):
                 self.send_header("Location", "/ok")
             else:
                 self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
             self.end_headers()
+            # Chromium 버전별 암묵적 /favicon.ico 요청이 redirect 검증을 흔들지 않게 한다.
+            self.wfile.write(b"<!doctype html><link rel='icon' href='data:,'>")
 
         def log_message(self, *_args):
             pass

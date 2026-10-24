@@ -1,3 +1,12 @@
+# Transport 지도용 T003 후속 — 검증 통과·머지 대기
+
+- `codex/traffic-link-geometry`는 최신 main085c329(T004~T006)을 통합하고 개별 TrafficLink.path의 EPSG:4326 좌표 계약을 추가한다.
+- 공개 polylineOl.js의 실제 LineString 변환과 경부선65구간/361링크의 path를 확인했다.
+- 현재 T004 이후 작업은 원래 체크아웃에서 계속하며 이 후속은 그 파일·진행 순서를 바꾸지 않는다.
+- offline157개·strict mypy·실제 Chromium live12개와 양방향 경로4표본, James/Popper 독립 리뷰와 b3af6bc CI6개가 통과했다. 설치본을 소비하는 Transport 실제 API/375·1440px 지도도 확인했다. PR4는 Draft이며 머지하지 않았다.
+- 최신 main 통합 최종 소스2e3555b는 offline279/99.52%·mypy7·CI6개·실제 Chromium35개·wheel 설치본을 통과했다.
+  최종 독립2리뷰의 잔여 P0/P1/P2는 없다. [증빙](validation/traffic-link-geometry.md)을 정산한 뒤 PR4 머지를 확인한다.
+
 # 재개 지점
 
 T001 PR #1(`1657e13`), T002 PR #2(`b11566e`), T003 PR #3(`61b357f`) 머지를 확인했다.

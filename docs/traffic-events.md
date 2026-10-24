@@ -44,7 +44,11 @@
 `LENGTH`는 화면의 합계 `/1000` km 표시와 대조한 미터 수치다.
 `TIME`은 화면의 여러 계산과 직접 표시가 일관되지 않아 단위를 추정하지 않고 raw로만 보존한다.
 null 속도는 `None`, 숫자 0은 원문 0이다. 음수·비유한 수·bool·문자열 숫자는 스키마 오류다.
-구간의 원시 집계값은 `raw_info`, 개별 링크의 원시 경로·추가 필드는 `raw`에 있다.
+구간의 원시 집계값은 `raw_info`, 개별 링크의 추가 원문은 `raw`에 있다. 개별 `path`는 (경도,위도) tuple로도 제공한다.
+공개 `polylineOl.js`가 `new ol.geom.LineString(link.path).transform('EPSG:4326', ...)`로
+표시하는 실제 코드를 Chromium에서 대조했다. 경로는 추정·간소화·다른 provider 링크와 결합하지 않는다.
+미제공 경로는 빈 tuple이며 잘못된 타입·좌표·점 수는 전체 응답을 스키마 오류로 거절한다.
+좌표계 근거: [공식 지도 선형 표시 코드](https://www.its.go.kr/js/map/polylineOl.js).
 응답의 렌더링용 집계 geometry, EVENT/CCTVP 분기는 이 소통 모델에 포함하지 않는다.
 
 ## 돌발 웹 응답
