@@ -6,12 +6,14 @@ from .exceptions import (
     KritsAccessError,
     KritsClosedError,
     KritsError,
+    KritsIntegrityError,
     KritsNetworkError,
     KritsProviderError,
     KritsRateLimitError,
     KritsSchemaError,
 )
-from .models import CatalogChanges, Cctv, DataSnapshot, Detour, DetourRoad, FileAttachment, NodeLinkRelease, OpenDataService, PageSnapshot, Road, RoadEvent, RoadType, TrafficLink, TrafficSection, TravelTime
+from .models import CatalogChanges, Cctv, DataSnapshot, Detour, DetourRoad, FileAttachment, NodeLinkRelease, OpenDataService, PageSnapshot, Road, RoadEvent, RoadType, StoredFile, TrafficLink, TrafficSection, TravelTime
+from .storage import FileStore
 from .parse import compare_nodelink_catalogs
 
 __all__ = [
@@ -21,4 +23,5 @@ __all__ = [
     "Cctv", "Detour", "DetourRoad", "TravelTime",
     "FileAttachment", "OpenDataService",
     "NodeLinkRelease", "CatalogChanges", "compare_nodelink_catalogs",
+    "FileStore", "StoredFile", "KritsIntegrityError",
 ]

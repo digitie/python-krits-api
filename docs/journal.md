@@ -9,6 +9,13 @@
 
 # 작업 기록
 
+- T007: 실제 Chromium CDP 스트림 probe로 노드링크 CSV655bytes를 확인한 뒤,
+  공개 API로 XLSX8927bytes 다운로드·SHA-256·manifest·재사용을 검증했다.
+  localhost Chromium11개와 오프라인376/98.35%가 통과했다. 전체 검증·리뷰·머지는 아직 전이다.
+
+- T006A 증빙 head `97630e1`의 CI6개 job 통과 후 PR #8을 `d31eeb5`로 머지했다.
+  해당 `origin/main`에서 `codex/t007-download-manifest`를 만들고 T007을 시작했다.
+
 - T006A 최종 통합 소스 `1915033`은 두 독립 재리뷰, 오프라인309/99.05%,
   실제 Chromium 전체live43(ITS21+로컬22), 빌드·소스CI6개job을 통과했다.
   마지막/연속 취소의 정리 barrier P2와 재개 문서 모순을 수정·재검토했다.

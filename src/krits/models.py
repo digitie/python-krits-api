@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Generic, Literal, TypeVar
 
 RoadType = Literal["highway", "national"]
@@ -162,3 +163,16 @@ class CatalogChanges:
     added_ids: tuple[str, ...]
     missing_ids: tuple[str, ...]
     changed_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class StoredFile:
+    """원본 전송 크기·해시 검증 완료본. 내부 형식 검사는 별도이며 원문을 보존한다."""
+
+    attachment: FileAttachment
+    path: Path
+    manifest_path: Path
+    sha256: str
+    size_bytes: int
+    collected_at: datetime
+    content_type: str

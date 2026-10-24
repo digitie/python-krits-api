@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable, Coroutine
 from contextlib import AsyncExitStack, asynccontextmanager
 import math
 from typing import Any, TypeVar
@@ -38,6 +38,7 @@ def _allowed_resource(raw_url: str, resource_type: str) -> bool:
 async def _intercept_request(
     session: CDPSession, event: dict[str, Any], rate_limiter: AsyncTokenBucket | None = None,
     blocked: Callable[[], bool] | None = None,
+    *, intercept_response: bool = False,
 ) -> None:
     """리디렉션을 포함한 각 전송 전에 Chromium 요청을 종결한다."""
     request_id = event["requestId"]
@@ -48,7 +49,14 @@ async def _intercept_request(
             if blocked and blocked():
                 await session.send("Fetch.failRequest", {"requestId": request_id, "errorReason": "BlockedByClient"})
             else:
-                await session.send("Fetch.continueRequest", {"requestId": request_id})
+                parameters: dict[str, Any] = {"requestId": request_id}
+                if intercept_response:
+                    parameters["interceptResponse"] = True
+                    headers = event["request"].get("headers", {})
+                    parameters["headers"] = [{"name": key, "value": str(value)}
+                                             for key, value in headers.items() if key.lower() != "accept-encoding"]
+                    parameters["headers"].append({"name": "Accept-Encoding", "value": "identity"})
+                await session.send("Fetch.continueRequest", parameters)
         else:
             await session.send("Fetch.failRequest", {"requestId": request_id, "errorReason": "BlockedByClient"})
     except PlaywrightError:
@@ -82,6 +90,8 @@ class BrowserSession:
         self._loop: asyncio.AbstractEventLoop | None = None
         self._closed = False
         self._denied_status: int | None = None
+        self._cdp: CDPSession | None = None
+        self._request_handler: Callable[[CDPSession, dict[str, Any]], Coroutine[Any, Any, None]] | None = None
 
     def _raise_denial(self) -> None:
         if self._denied_status == 429:
@@ -148,8 +158,9 @@ class BrowserSession:
 
         def intercept(event: dict[str, Any]) -> asyncio.Task[None]:
             assert session is not None
-            task = asyncio.create_task(_intercept_request(session, event, self.rate_limiter,
-                                                        lambda: self._denied_status is not None))
+            task = asyncio.create_task(self._request_handler(session, event) if self._request_handler is not None
+                                       else _intercept_request(session, event, self.rate_limiter,
+                                                               lambda: self._denied_status is not None))
             pending.add(task)
 
             def done(finished: asyncio.Task[None]) -> None:
@@ -169,6 +180,7 @@ class BrowserSession:
         await session.send("Fetch.enable", {"patterns": [{"urlPattern": "*", "requestStage": "Request"}]})
         page.set_default_timeout(self.timeout * 1000)
         self._page = page
+        self._cdp = session
         return page
 
     async def _acquire(self, creation: Awaitable[T], close: Callable[[T], Awaitable[None]]) -> T:
@@ -196,6 +208,7 @@ class BrowserSession:
     async def _dispose(self) -> None:
         stack, self._stack = self._stack, None
         self._page = None
+        self._cdp = None
         if stack is None:
             return
         # 취소가 반복돼도 page/context/browser/driver 정리가 끝날 때까지 기다린다.

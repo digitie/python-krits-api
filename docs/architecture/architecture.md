@@ -22,8 +22,9 @@ ITS 공개 자료실 ─ Chromium 발견 ─ 첨부 다운로드 ─ 형식/크�
 | `models.py` | frozen dataclass, 출처·수집 시각·범위·원시 필드 | 표준 라이브러리 |
 | `parse.py` | JSON/DOM 레코드의 엄격 검증·타입 변환 | models, exceptions |
 | 파일 목록(`client.py/parse.py`) | 기간 검색·실제 DOM 첨부 발견·자료실 관찰 차이 | browser, models |
-| `files.py` (T007 예정) | bounded 첨부 다운로드 | browser, models, storage |
-| `storage.py` (T007 예정) | 청크·해시·임시파일·원자적 manifest·재검증 | 표준 라이브러리 |
+| `files.py` | CDP response 스트림·64KiB 청크·길이/HTML/상한 검사 | browser, models, storage |
+| `storage.py` | 해시 원본·불변 manifest·재검증·교체 이력 | 표준 라이브러리 |
+| `_file_io.py` | MOIS 기준 thread 작업 완료 후 취소 전파 | asyncio |
 | `exceptions.py` | 접근·제한·네트워크·스키마·무결성 오류 | 표준 라이브러리 |
 
 클라이언트는 첫 operation에서 자원을 만들고 `async with`/`aclose()`로 닫는다.
