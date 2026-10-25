@@ -4,6 +4,9 @@ T001–T010과 추가 부하 제어 T006A를 완료했고, 사용자 후속 요�
 현재 브랜치는 최신 origin/main에서 만든 codex/t011-public-expansion이다.
 미지원5종을 메인 통합지도·개별/통계/검색 화면까지 재조사해 실제 공개 응답이 검증된 기능을 추가한다.
 두 독립 리뷰·Chromium live·CI 통과 후 머지한다.
+T011 최종 구현 b2b4e37은 두 재리뷰·offline598/97.26%·전체Chromium78개(skip0)·
+별도wheel 기존/새 기능·참고4파일/전체ZIP재사용·sdist·소스CI6개job을 통과했다.
+[T011 증빙](validation/t011.md)의 최종 문서 CI를 확인하고 PR #14를 머지한다.
 T010 PR #12의 증빙 head `bfad2e5`는 CI40069682240의 6개 job을 통과했고,
 `1d430aba47caaffa27e81e963307f77678d9e7c1`로 origin/main에 머지됐다.
 [완료 목록](tasks-done.md)과 [최종 증빙](validation/t010.md)에 상세 이력이 있다.
