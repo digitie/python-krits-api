@@ -88,7 +88,7 @@ def _cached_query(function: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[
             owner._query_cache.clear()
         bound = parameters.bind(*args, **kwargs)
         bound.apply_defaults()
-        key = (function.__name__, tuple((name, val) for name, val in bound.arguments.items() if name != "self"))
+        key = (function.__name__, tuple((name, type(val), val) for name, val in bound.arguments.items() if name != "self"))
         try:
             hash(key)
         except TypeError:
@@ -340,11 +340,15 @@ async def _forecast_catalog(page: Page) -> tuple[DetourRoad, ...]:
     for selector in (".fc_box", "#tmpl_route_list"):
         if await page.locator(selector).count() != 1:
             raise KritsSchemaError("예측 노선 컨테이너/템플릿이 없거나 중복됐습니다")
+    rows = page.locator(".fc_box li.dep1")
     if roads:
-        rows = page.locator(".fc_box li.dep1")
         await rows.first.wait_for(state="attached")
-        if parse_detour_roads(await rows.evaluate_all(_ROADS_SCRIPT)) != roads:
-            raise KritsSchemaError("예측 노선 응답과 화면 DOM이 일치하지 않습니다")
+    else:
+        # 빈 응답도 페이지 콜백의 렌더링 완료 후 실제 DOM과 대조한다.
+        await page.wait_for_load_state("networkidle")
+    dom = await rows.evaluate_all(_ROADS_SCRIPT)
+    if (() if dom == [] else parse_detour_roads(dom)) != roads:
+        raise KritsSchemaError("예측 노선 응답과 화면 DOM이 일치하지 않습니다")
     return roads
 
 

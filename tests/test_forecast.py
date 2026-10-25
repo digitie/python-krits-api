@@ -1,5 +1,6 @@
 """실제 공개 예측 응답의 결측·식별자·요청 시각·캐시·입력 경계를 검증한다."""
 
+import asyncio
 from copy import deepcopy
 from datetime import date, datetime
 import json
@@ -77,7 +78,7 @@ def test_optional_aggregate_values_and_duplicates():
     lambda f: f.update(id=123), lambda f: f.update(type="wrong"),
     lambda f: f["properties"].update(type="DETOUR"), lambda f: f["properties"].update(INFO="{}"),
     lambda f: f["properties"]["INFO"].update(MLN_SCTN_ID="2"),
-    lambda f: f["properties"]["INFO"].update(ROAD_NO="2"),
+    lambda f: f["properties"]["INFO"].update(ROAD_NO=2),
     lambda f: f["properties"]["INFO"].update(LINK_SEQ=0),
     lambda f: f["properties"]["INFO"].update(LENGTH=-1),
     lambda f: f["properties"]["INFO"].pop("PASNG_SPED"),
@@ -107,6 +108,12 @@ def test_detail_duplicate_sequence_count_null_and_repeated_link_ids():
     data = fixture("links"); data["MAIN"]["totalFeatures"] = 99
     with pytest.raises(KritsSchemaError):
         parse_forecast_links(data, "1", "1")
+
+
+def test_real_branch_section_preserves_leading_zero_and_link_own_road():
+    links = parse_forecast_links(fixture("links-0401"), "1", "0401")
+    assert len(links) == 4 and all(link.section_id == "0401" for link in links)
+    assert {link.raw_info["ROAD_NO"] for link in links if link.route == "MAIN"} == {"1", "451"}
 
 
 @pytest.mark.parametrize("value", [None, {}, [], {"header": {"state": "ERROR"}}])
@@ -171,6 +178,41 @@ async def test_public_queries_have_scope_and_cache(forecast_browser):
     forecast_browser.query.assert_awaited_once()
 
 
+@pytest.mark.parametrize("detail", [False, True])
+@pytest.mark.parametrize("invalid", [True, 1.0])
+@pytest.mark.parametrize("inflight", [False, True])
+async def test_cached_hour_cannot_skip_exact_type_validation(forecast_browser, detail, invalid, inflight):
+    entered, release = asyncio.Event(), asyncio.Event()
+    original = forecast_browser.selection.return_value
+
+    async def selection(*args):
+        entered.set()
+        if inflight:
+            await release.wait()
+        return original
+
+    forecast_browser.selection.side_effect = selection
+    async with KritsClient() as client:
+        async def call(hour):
+            if detail:
+                return await client.get_forecast_links("1", "1", "1", forecast_date=DAY, hour=hour)
+            return await client.list_forecast_sections("1", forecast_date=DAY, hour=hour)
+
+        valid = asyncio.create_task(call(1))
+        await asyncio.wait_for(entered.wait(), 2)
+        if not inflight:
+            await valid
+        try:
+            with pytest.raises(ValueError):
+                await asyncio.wait_for(call(invalid), 2)
+        finally:
+            release.set()
+            result = await valid
+        assert result.scope["hour"] == "01"
+    forecast_browser.selection.assert_awaited_once()
+    assert forecast_browser.query.await_count == int(detail)
+
+
 async def test_unknown_section_cannot_request_detail(forecast_browser):
     async with KritsClient() as client:
         with pytest.raises(ValueError):
@@ -216,6 +258,25 @@ async def test_catalog_dom_cross_check_and_missing_template(browser, monkeypatch
     with pytest.raises(KritsSchemaError):await _forecast_catalog(p)
     locator.count.return_value=0
     with pytest.raises(KritsSchemaError):await _forecast_catalog(p)
+
+
+@pytest.mark.parametrize("remaining_dom", [False, True])
+async def test_empty_forecast_catalog_must_match_completed_dom(browser, monkeypatch, remaining_dom):
+    data = fixture("roads")
+    data["body"]["data"]["SECTIONS"]["LIST"] = []
+    dom = [{"road_number": r.road_number, "name": r.name} for r in parse_forecast_roads(fixture("roads"))]
+    locator = SimpleNamespace(count=AsyncMock(return_value=1), evaluate_all=AsyncMock(return_value=dom if remaining_dom else []))
+    browser.page.locator.side_effect = None
+    browser.page.locator.return_value = locator
+    browser.page.wait_for_load_state = AsyncMock()
+    monkeypatch.setattr("krits.client._action_json", AsyncMock(return_value=data))
+    if remaining_dom:
+        with pytest.raises(KritsSchemaError):
+            await _forecast_catalog(browser.page)
+    else:
+        assert await _forecast_catalog(browser.page) == ()
+    browser.page.wait_for_load_state.assert_awaited_once_with("networkidle")
+    locator.evaluate_all.assert_awaited_once()
 
 
 async def test_page_query_uses_site_ajax_and_exact_response_filter(monkeypatch):

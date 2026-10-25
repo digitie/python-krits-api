@@ -11,7 +11,7 @@ PowerShell 예다. 대용량 원본은 Git 저장소 밖 보관소에 한 번 �
 
 ```powershell
 $env:KRITS_CHROMIUM_EXECUTABLE='C:\path\to\chrome.exe'
-python -m pytest -m live --run-live --run-large-files --file-store F:\dev\_data\krits -s
+python -m pytest tests -c pyproject.toml -m live --run-live --run-large-files --file-store=F:\dev\_data\krits -s
 ```
 
 `--run-large-files`만 주고 `--file-store`를 생략하거나 저장소 내부를 지정하면 실패한다.
@@ -42,6 +42,8 @@ python -I tools\installed_e2e.py --package-root C:\Temp\krits-wheel-SHA --file-s
 검증한 인코딩으로 명시 지정한다. 이후 파일이 바뀌면 근거를 다시 확인해 인자를 바꿔야 한다.
 전체 ZIP은 선행 pytest로 수집된 current 버전만 재사용해 추가 대용량 전송을 하지 않는다.
 설치본에서도 CRC·메타데이터와 같은 원본 SHA를 확인한다.
+예측 대상·구간·상세도 호출하고, 예측/VDS/VSL 참고 XLSX 4개는 선행 live가 보관한 원본을
+Chromium operation 없이 재사용해 CRC·시트 읽기를 검사한다. 각 파일의 판본은 추정하지 않는다.
 작은 내역서/전체 ZIP 재사용에서는 첨부 메타데이터가 같아야 하며 Chromium operation을
 발생시키면 즉시 실패한다. 반환 파일의 동등성만으로 전송0회를 판정하지 않는다.
 보관소/설치 경로의 저장소 내부 검사는 Windows 확장 경로도 실제 디렉터리 동일성으로 확인한다.

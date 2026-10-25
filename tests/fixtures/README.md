@@ -41,6 +41,9 @@
 9구간 중 앞2건, forecast-links.json은 같은 첫 구간의 MAIN43/DETOUR148링크 중 각 앞2건이다.
 축약한 FeatureCollection의 totalFeatures만2로 조정했고 원문 ID/타입/순서/좌표는 보존했다.
 우회 두 번째 링크의 자체 ROAD_NO=47을 본선1로 바꾸지 않는다.
+forecast-links-0401.json은 같은 조회의 구간/우회ID `0401` 상세 MAIN8/DETOUR17개에서
+MAIN 노선1·451 각각 첫 링크와 DETOUR 앞2개만 보존했다. totalFeatures만2로 조정했다.
+MAIN도 상위 노선1과 다른 ROAD_NO를 포함하며 앞자리0을 보존해야 한다.
 집계값이 없고 상세 PASNG_SPED=1인 실제 상태를 유효한 예측값으로 꾸미지 않는다.
 API 키·토큰·hidden input·쿠키·전체 HTML·XLSX 원본은 fixture에 포함하지 않는다.
 참고 XLSX의 실제 원문은 저장소 밖 FileStore에 보관하고 live 검사로 검증한다.

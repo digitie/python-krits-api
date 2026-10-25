@@ -35,6 +35,18 @@ async def test_live_forecast_date_hour_directions_and_link_raw():
         assert again.items==roads.items
 
 
+async def test_live_forecast_branch_section_preserves_actual_link_roads():
+    forecast_date=date.today()+timedelta(days=1)
+    async with KritsClient(executable_path=os.getenv("KRITS_CHROMIUM_EXECUTABLE")) as client:
+        sections=await client.list_forecast_sections("1",forecast_date=forecast_date,hour=12)
+        branch=next(section for section in sections.items if section.section_id=="0401")
+        links=await client.get_forecast_links("1",branch.section_id,branch.detour_id,forecast_date=forecast_date,hour=12)
+        assert links.items and all(link.section_id=="0401" for link in links.items)
+        main_roads={link.raw_info["ROAD_NO"] for link in links.items if link.route=="MAIN"}
+        assert {"1","451"} <= main_roads
+        print("예측 지선 상세",links.collected_at.isoformat(),branch.section_id,len(links.items),sorted(main_roads),flush=True)
+
+
 @pytest.mark.parametrize("service",["fcTraffic","detectorInfo","vsl"])
 async def test_live_reference_xlsx_discovery_download_inspect_read_reuse(service,request,tmp_path,monkeypatch):
     store=FileStore(request.config.getoption("--file-store") or tmp_path)

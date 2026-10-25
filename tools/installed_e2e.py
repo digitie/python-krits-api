@@ -79,6 +79,28 @@ async def run(args):
         weak = await client.list_data_files("weakSection")
         period = await client.list_data_files("event", start_date=end-timedelta(days=3), end_date=end)
         releases = await client.list_nodelink_releases(start_date=end-timedelta(days=300), end_date=end)
+        forecast_day = end + timedelta(days=1)
+        forecast_roads = await client.list_forecast_roads()
+        forecast_sections = await client.list_forecast_sections(forecast_roads.items[0].road_number,
+            forecast_date=forecast_day, hour=12)
+        first = forecast_sections.items[0]
+        forecast_links = await client.get_forecast_links(first.road_number, first.section_id, first.detour_id,
+            forecast_date=forecast_day, hour=12)
+        assert forecast_links.items and not forecast_links.complete and forecast_links.scope["hour"] == "12"
+        summary["forecast"] = {"roads":len(forecast_roads.items), "sections":len(forecast_sections.items),
+                               "links":len(forecast_links.items)}
+        summary["references"] = []
+        for service in ("fcTraffic", "detectorInfo", "vsl"):
+            references = await client.list_reference_files(service)
+            assert references.items and references.scope["kind"] == "reference" and not references.complete
+            for attachment in references.items:
+                stored = await reuse_file(client, store, attachment, max_bytes=50*1024**2)
+                limits = FileLimits(max_rows=100_000, max_table_bytes=64*1024**2)
+                report = await inspect_file(store, stored, limits=limits)
+                table = await read_xlsx(store, stored, limits=limits)
+                assert report.kind == "xlsx" and report.crc_checked and table.rows
+                summary["references"].append({"service":service, "bytes":stored.size_bytes,
+                    "sha256":stored.sha256, "sheet":table.sheet_name, "rows":len(table.rows)})
         for name, result in (("roads", roads), ("traffic", traffic), ("events", events), ("cctvs", cctvs),
                              ("detours", detours), ("travel", travel), ("vms", vms), ("weak", weak),
                              ("period", period), ("releases", releases)):

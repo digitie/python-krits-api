@@ -61,7 +61,9 @@ provider는 해당 함수를 수정하지 않는다. 페이지를 방문하고 �
 관찰 시 집계값은 모두 없었고 상세 링크의 PASNG_SPED는 모두1이었다.
 이 값을 정체 속도나 공식 API의 유효한 예측 속도로 단정하지 않는다.
 `ForecastLink.raw_speed`와 raw_info에 그대로 보존하고 링크 원시값으로 집계 결측을 채우지 않는다.
-상세의 우회 링크는 다른 노선을 통과하므로 ROAD_NO가 요청한 본선 노선번호와 다를 수 있다.
+상세 링크의 ROAD_NO는 MAIN/DETOUR 모두 상위 조회 노선번호와 다를 수 있다.
+실제 노선1의 구간 `0401` 본선에는 ROAD_NO `1`과 `451`이 함께 있었다.
+구간 소속은 선택한 MLN_SCTN_ID로 검사하고 링크 자체의 ROAD_NO는 원문에 보존한다.
 본선 노선/양쪽 구간 ID를 검사하고 우회 링크의 자체 노선번호를 보존한다.
 순서를 바꾸거나 LINK_ID로 중복 제거하지 않는다. 같은 경로의 LINK_SEQ 중복은 오류다.
 좌표는 [공개 polylineOl.js](https://www.its.go.kr/js/map/polylineOl.js)의 GeoJSON 계약으로 검사하고

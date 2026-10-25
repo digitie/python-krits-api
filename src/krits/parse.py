@@ -370,7 +370,7 @@ def parse_forecast_links(value: object, road_number: str, section_id: str) -> tu
             identifier = _text(info.get("LINK_ID"), "LINK_ID")
             sequence = _count(info.get("LINK_SEQ"), "LINK_SEQ")
             if (feature.get("type") != "Feature" or props.get("type") != route or feature.get("id") != identifier
-                    or info.get("MLN_SCTN_ID") != section_id or route == "MAIN" and info.get("ROAD_NO") != road_number
+                    or info.get("MLN_SCTN_ID") != section_id
                     or sequence == 0 or sequence in seen):
                 raise KritsSchemaError("예측 링크 종류/ID/구간/도로/순번이 일치하지 않거나 중복됐습니다")
             seen.add(sequence)
