@@ -11,6 +11,11 @@
 
 ## 2026-10-25 후속 공개 기능 확장
 
+- T011 증빙 head a3f2d6c의 독립 A/B 증빙 검토와 CI40179595983의6개job 성공을 확인하고,
+  PR #14를 cdbb0bab9c25eb4104f44e3b58d1f11bca43cdcf로 머지했다.
+  origin/main에서 머지를 확인한 뒤 완료 기록 브랜치를 만들고 tasks/tasks-done/journal/resume을 갱신한다.
+  현재 진행 중인 구현 task는 없으며 남은 실시간 서비스 한계는 지원표에 보존한다.
+
 - T011 최종 구현 b2b4e37에서 독립 적대적 리뷰 A/B가 기존P2 해결·추가P0~P2 없음으로 통과했다.
   빈응답 DOM 대조·타입별 캐시·0401 본선노선1/451 혼재를 수정했다. offline598/97.26%,
   전체Chromium78개(skip0)·별도wheel 기존/새 기능·참고4파일/전체ZIP재사용·sdist·CI6개job 통과.
