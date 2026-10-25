@@ -1,0 +1,63 @@
+{
+  "header": {
+    "result": "정상 처리되었습니다.",
+    "state": "OK"
+  },
+  "body": {
+    "dataLen": 1,
+    "data": {
+      "SECTIONS": {
+        "LIST": [
+          {
+            "ROAD_NO": "1",
+            "MINX": 127.040245,
+            "SCTN_TY_NM": "고속도로",
+            "MINY": 36.991558,
+            "TX": 127.15508,
+            "DRC_NM": "하행",
+            "TY": 36.991558,
+            "SCTN_TY_CODE": "EX",
+            "DRC_CODE": "1",
+            "SCTN_NM": "양재IC~안성IC",
+            "SCTN_SN": 1,
+            "DETOUR_RANK": 4,
+            "SCTN_DETAIL_INFO": "양재IC&rarr;판교Jct&rarr;판교IC&rarr;신갈Jct&rarr;수원신갈IC&rarr;기흥IC&rarr;기흥동탄IC&rarr;동탄Jct&rarr;오산IC&rarr;안성Jct&rarr;안성IC",
+            "MAIN_RANK": 4,
+            "FX": 127.040245,
+            "FY": 37.462936,
+            "DETU_ID": "1",
+            "MAXY": 37.462936,
+            "MAXX": 127.15508,
+            "PREDICT_AT": "Y",
+            "ROAD_NM": "경부고속도로",
+            "MLN_SCTN_ID": "1"
+          },
+          {
+            "ROAD_NO": "1",
+            "MINX": 127.153114,
+            "SCTN_TY_NM": "고속도로",
+            "MINY": 36.758392,
+            "TX": 127.2185,
+            "DRC_NM": "하행",
+            "TY": 36.758392,
+            "SCTN_TY_CODE": "EX",
+            "DRC_CODE": "1",
+            "SCTN_NM": "안성IC~목천IC",
+            "SCTN_SN": 2,
+            "DETOUR_RANK": 4,
+            "SCTN_DETAIL_INFO": "안성IC&rarr;북천안IC&rarr;천안IC&rarr;천안Jct&rarr;목천IC",
+            "MAIN_RANK": 4,
+            "FX": 127.153114,
+            "FY": 36.996693,
+            "DETU_ID": "2",
+            "MAXY": 36.996693,
+            "MAXX": 127.2185,
+            "PREDICT_AT": "Y",
+            "ROAD_NM": "경부고속도로",
+            "MLN_SCTN_ID": "2"
+          }
+        ]
+      }
+    }
+  }
+}

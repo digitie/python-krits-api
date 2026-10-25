@@ -1,0 +1,266 @@
+{
+  "MAIN": {
+    "type": "FeatureCollection",
+    "features": [
+      {
+        "type": "Feature",
+        "geometry_name": "GEOMETRY",
+        "id": "1210001901",
+        "geometry": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              127.040275877093,
+              37.4630030006895
+            ],
+            [
+              127.042005779334,
+              37.4611849854443
+            ]
+          ]
+        },
+        "properties": {
+          "INFO": {
+            "MINX": 127.040245,
+            "ROAD_NO": "1",
+            "MINY": 36.991558,
+            "TX": 127.15508,
+            "PASNG_SPED": 1,
+            "TY": 36.991558,
+            "LENGTH": 253.3,
+            "SCTN_TY_CODE": "EX",
+            "ROAD_NAME": "경부고속도로",
+            "SCTN_END_NM": "안성IC",
+            "SCTN_DETAIL_INFO": "양재IC→판교Jct→판교IC→신갈Jct→수원신갈IC→기흥IC→기흥동탄IC→동탄Jct→오산IC→안성Jct→안성IC",
+            "FX": 127.040245,
+            "FY": 37.462936,
+            "LINK_ID": "1210001901",
+            "LINK_SEQ": 1,
+            "CTPRVN_NM": "서울특별시",
+            "SCTN_TY_NM": "고속도로",
+            "SCTN_LT": 56200,
+            "MAX_SPD": 110,
+            "CNF_APPLC_TY": "0",
+            "LANES": 5,
+            "TIME": 0,
+            "ROAD_RANK": "101",
+            "MAXY": 37.462936,
+            "MAXX": 127.15508,
+            "SIGNGU_NM": "서초구",
+            "SCTN_BEGIN_NM": "양재IC",
+            "MLN_SCTN_ID": "1"
+          },
+          "type": "MAIN"
+        }
+      },
+      {
+        "type": "Feature",
+        "geometry_name": "GEOMETRY",
+        "id": "1210000800",
+        "geometry": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              127.042005779334,
+              37.4611849854443
+            ],
+            [
+              127.044130829893,
+              37.4589515370868
+            ]
+          ]
+        },
+        "properties": {
+          "INFO": {
+            "MINX": 127.040245,
+            "ROAD_NO": "1",
+            "MINY": 36.991558,
+            "TX": 127.15508,
+            "PASNG_SPED": 1,
+            "TY": 36.991558,
+            "LENGTH": 311.1,
+            "SCTN_TY_CODE": "EX",
+            "ROAD_NAME": "경부고속도로",
+            "SCTN_END_NM": "안성IC",
+            "SCTN_DETAIL_INFO": "양재IC→판교Jct→판교IC→신갈Jct→수원신갈IC→기흥IC→기흥동탄IC→동탄Jct→오산IC→안성Jct→안성IC",
+            "FX": 127.040245,
+            "FY": 37.462936,
+            "LINK_ID": "1210000800",
+            "LINK_SEQ": 2,
+            "CTPRVN_NM": "서울특별시",
+            "SCTN_TY_NM": "고속도로",
+            "SCTN_LT": 56200,
+            "MAX_SPD": 110,
+            "CNF_APPLC_TY": "0",
+            "LANES": 5,
+            "TIME": 0,
+            "ROAD_RANK": "101",
+            "MAXY": 37.462936,
+            "MAXX": 127.15508,
+            "SIGNGU_NM": "서초구",
+            "SCTN_BEGIN_NM": "양재IC",
+            "MLN_SCTN_ID": "1"
+          },
+          "type": "MAIN"
+        }
+      }
+    ],
+    "totalFeatures": 2
+  },
+  "DETOUR": {
+    "type": "FeatureCollection",
+    "features": [
+      {
+        "type": "Feature",
+        "geometry_name": "GEOMETRY",
+        "id": "1210001300",
+        "geometry": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              127.040275877093,
+              37.4630030006895
+            ],
+            [
+              127.040497195496,
+              37.4626557472051
+            ],
+            [
+              127.040595595463,
+              37.4624653395631
+            ],
+            [
+              127.040618945505,
+              37.462316377167
+            ],
+            [
+              127.040567501618,
+              37.4621671224048
+            ],
+            [
+              127.040478369184,
+              37.4620654197202
+            ],
+            [
+              127.040314187706,
+              37.4620051594057
+            ],
+            [
+              127.040187038462,
+              37.4620046648091
+            ],
+            [
+              127.039453400262,
+              37.4621091266539
+            ],
+            [
+              127.039333363581,
+              37.4621682802541
+            ],
+            [
+              127.039212962231,
+              37.4622870547074
+            ],
+            [
+              127.039167316986,
+              37.4624120816316
+            ],
+            [
+              127.039159068689,
+              37.4625372547275
+            ],
+            [
+              127.039188108177,
+              37.4626804600236
+            ],
+            [
+              127.039358639433,
+              37.4630730264261
+            ]
+          ]
+        },
+        "properties": {
+          "INFO": {
+            "MINX": 127.039,
+            "ROAD_NO": "1",
+            "MINY": 36.9968,
+            "TX": 127.15314,
+            "PASNG_SPED": 1,
+            "TY": 36.996758,
+            "LENGTH": 326.9,
+            "ROAD_NAME": "경부고속도로",
+            "SCTN_DETAIL_INFO": "양재IC→용인서울선→지방도311번→지방도317번→국도1호선→안성IC",
+            "FX": 127.040276,
+            "FY": 37.463,
+            "LINK_ID": "1210001300",
+            "LINK_SEQ": 1,
+            "CTPRVN_NM": "서울특별시",
+            "SCTN_LT": 74068,
+            "MAX_SPD": 40,
+            "CNF_APPLC_TY": "0",
+            "LANES": 1,
+            "TIME": 0,
+            "ROAD_RANK": "101",
+            "MAXY": 37.4657,
+            "MAXX": 127.219,
+            "SIGNGU_NM": "서초구",
+            "MLN_SCTN_ID": "1"
+          },
+          "type": "DETOUR"
+        }
+      },
+      {
+        "type": "Feature",
+        "geometry_name": "GEOMETRY",
+        "id": "1210179201",
+        "geometry": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              127.039358622487,
+              37.4630730426499
+            ],
+            [
+              127.039831328252,
+              37.4633312073689
+            ],
+            [
+              127.0398404846,
+              37.4633363132005
+            ]
+          ]
+        },
+        "properties": {
+          "INFO": {
+            "MINX": 127.039,
+            "ROAD_NO": "47",
+            "MINY": 36.9968,
+            "TX": 127.15314,
+            "PASNG_SPED": 1,
+            "TY": 36.996758,
+            "LENGTH": 51.7,
+            "ROAD_NAME": "양재대로",
+            "SCTN_DETAIL_INFO": "양재IC→용인서울선→지방도311번→지방도317번→국도1호선→안성IC",
+            "FX": 127.040276,
+            "FY": 37.463,
+            "LINK_ID": "1210179201",
+            "LINK_SEQ": 2,
+            "CTPRVN_NM": "서울특별시",
+            "SCTN_LT": 74068,
+            "MAX_SPD": 60,
+            "CNF_APPLC_TY": "0",
+            "LANES": 6,
+            "TIME": 0,
+            "ROAD_RANK": "103",
+            "MAXY": 37.4657,
+            "MAXX": 127.219,
+            "SIGNGU_NM": "서초구",
+            "MLN_SCTN_ID": "1"
+          },
+          "type": "DETOUR"
+        }
+      }
+    ],
+    "totalFeatures": 2
+  }
+}

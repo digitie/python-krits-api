@@ -83,7 +83,7 @@ def test_missing_optional_column_differs_from_null_and_wrong_type(kind, key, par
 def test_official_twelve_services_have_explicit_partial_or_unsupported_contract():
     rows = list_capabilities()
     assert len(rows) == len({r.service for r in rows}) == 12
-    assert {r.service for r in rows if r.status == "unsupported"} == {"fcTraffic", "detectorInfo", "safeDriving", "vsl", "dangerousCarInfo"}
+    assert {r.service for r in rows if r.status == "unsupported"} == {"safeDriving", "dangerousCarInfo"}
     for row in rows:
         assert row.limitation and row.source_url.endswith("service=" + row.service)
         assert bool(row.methods) is (row.status != "unsupported")

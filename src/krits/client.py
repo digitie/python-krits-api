@@ -16,14 +16,16 @@ from playwright.async_api import BrowserContext, Error as PlaywrightError, Locat
 from ._browser import BASE_URL, BrowserSession
 from ._cache import RequestCache, _settle
 from ._ratelimit import AsyncTokenBucket
+from ._references import REFERENCE_PATHS
 from .files import DEFAULT_MAX_BYTES, download_file, validate_attachment
 from .storage import FileStore
 from .exceptions import (
     KritsAccessError, KritsClosedError, KritsNetworkError, KritsProviderError, KritsRateLimitError, KritsSchemaError,
 )
-from .models import Cctv, DataSnapshot, Detour, DetourRoad, DisasterZone, FileAttachment, NodeLinkRelease, OpenDataService, PageSnapshot, Road, RoadEvent, RoadType, StoredFile, TrafficSection, TravelTime, Vms
+from .models import Cctv, DataSnapshot, Detour, DetourRoad, DisasterZone, FileAttachment, ForecastLink, ForecastSection, NodeLinkRelease, OpenDataService, PageSnapshot, ReferenceService, Road, RoadEvent, RoadType, StoredFile, TrafficSection, TravelTime, Vms
 from .parse import (decode_json, parse_cctvs, parse_detour_roads, parse_detours, parse_events,
                     parse_vms, parse_disaster_zones,
+                    parse_forecast_roads, parse_forecast_sections, parse_forecast_links, parse_reference_files,
                     nodelink_dom_ids, open_data_ids, parse_nodelink_releases, parse_open_data, parse_origins, parse_roads, parse_traffic,
                     parse_travel_times, parse_weak_files)
 
@@ -54,6 +56,20 @@ _ROADS_SCRIPT = """(elements) => elements.map(element => {
             road_number: title?.querySelector('span.road')?.textContent?.trim(),
             name: name?.textContent?.trim()};
 })"""
+_FORECAST_ROADS = "/map/getMainToDetourRoads"
+_FORECAST_SECTIONS = "/map/getMainToDetourSectionsByRoad"
+_FORECAST_LINKS = "/map/getMainToDetourSection"
+_FORECAST_CALENDAR = """() => {
+    if (typeof initDateButton !== 'function' || !document.querySelector('#inp_fcDate')) return null;
+    initDateButton();
+    const field = window.jQuery('#inp_fcDate');
+    const lower = field.datepicker('option', 'minDate');
+    const upper = field.datepicker('option', 'maxDate');
+    const now = new Date();
+    const format = d => d instanceof Date && Number.isFinite(d.valueOf())
+        ? [d.getFullYear(), String(d.getMonth()+1).padStart(2,'0'), String(d.getDate()).padStart(2,'0')].join('-') : null;
+    return {lower:format(lower),upper:format(upper),today:format(now),hour:now.getHours()};
+}"""
 P = ParamSpec("P")
 R = TypeVar("R")
 
@@ -307,6 +323,72 @@ def _date_range(start: date | None, end: date | None) -> tuple[str, str]:
     return start.isoformat(), end.isoformat()
 
 
+def _forecast_input(road_number: str, forecast_date: date, hour: int, direction: str) -> None:
+    """형식 오류는 브라우저 생성 전에 거부한다. 달력 범위는 페이지에서 확인한다."""
+    if not isinstance(road_number, str) or re.fullmatch(r"[0-9]{1,4}", road_number) is None:
+        raise ValueError("road_number는 예측 노선번호 문자열이어야 합니다")
+    if type(forecast_date) is not date or type(hour) is not int or not 0 <= hour <= 23 or direction not in ("1", "2"):
+        raise ValueError("forecast_date는 date, hour는0~23 정수, direction은1/2 문자열이어야 합니다")
+
+
+async def _forecast_catalog(page: Page) -> tuple[DetourRoad, ...]:
+    """개별 우회 화면의 예측 전용 초기 응답을 읽고 실제 노선 DOM과 대조한다."""
+    await page.goto("about:blank")
+    payload = await _action_json(page, _FORECAST_ROADS, lambda: _open_page(page, "detour"),
+                                 {"type": "fc", "sctnTyCode": "EX"})
+    roads = parse_forecast_roads(payload)
+    for selector in (".fc_box", "#tmpl_route_list"):
+        if await page.locator(selector).count() != 1:
+            raise KritsSchemaError("예측 노선 컨테이너/템플릿이 없거나 중복됐습니다")
+    if roads:
+        rows = page.locator(".fc_box li.dep1")
+        await rows.first.wait_for(state="attached")
+        if parse_detour_roads(await rows.evaluate_all(_ROADS_SCRIPT)) != roads:
+            raise KritsSchemaError("예측 노선 응답과 화면 DOM이 일치하지 않습니다")
+    return roads
+
+
+async def _forecast_query(page: Page, endpoint: str, data: dict[str, object]) -> object:
+    """화면의 ajaxRequest로 알려진 공개 웹 요청을 보낸다. 인증 API나 외부 HTTP를 쓰지 않는다."""
+    return await _action_json(page, endpoint, lambda: page.evaluate(
+        """([url, data]) => {
+            window.ajaxRequest({url, type:'post', data:JSON.stringify({body:{data}}),
+                dataType:'json', noBlock:true, callBack:function(){}});
+        }""", [endpoint, data]), data)
+
+
+async def _forecast_selection(
+    page: Page, road_number: str, forecast_date: date, hour: int, direction: str,
+) -> tuple[ForecastSection, ...]:
+    roads = await _forecast_catalog(page)
+    if road_number not in {road.road_number for road in roads}:
+        raise ValueError("공개 예측 목록에 없는 노선번호입니다")
+    await page.get_by_role("tab", name="예측정보", exact=True).click()
+    calendar = await page.evaluate(_FORECAST_CALENDAR)
+    if (not isinstance(calendar, dict) or any(not isinstance(calendar.get(key), str) for key in ("lower", "upper", "today"))
+            or type(calendar.get("hour")) is not int or not 0 <= calendar["hour"] <= 23):
+        raise KritsSchemaError("예측 달력의 날짜/시각 범위를 확인할 수 없습니다")
+    try:
+        lower, upper, today = (date.fromisoformat(calendar[key]) for key in ("lower", "upper", "today"))
+    except ValueError:
+        raise KritsSchemaError("예측 달력의 날짜 형식이 잘못됐습니다") from None
+    if not lower <= today <= upper:
+        raise KritsSchemaError("예측 달력의 현재일/최소일/최대일 관계가 잘못됐습니다")
+    if not lower <= forecast_date <= upper or forecast_date < today or forecast_date == today and hour < calendar["hour"]:
+        raise ValueError("예측 시각은 화면 달력 범위 안의 현재 또는 미래 시각이어야 합니다")
+    payload = await _forecast_query(page, _FORECAST_SECTIONS, {
+        "searchType": "fc", "roadNo": road_number, "sctnTyCode": "EX", "drcCode": direction,
+        "fcDate": forecast_date.strftime("%Y%m%d"), "fcHour": f"{hour:02d}",
+    })
+    return parse_forecast_sections(payload, road_number, direction)
+
+
+def _forecast_scope(road_number: str, forecast_date: date, hour: int, direction: str) -> dict[str, str]:
+    return {"road_type": "highway", "road_number": road_number, "direction": direction,
+            "forecast_date": forecast_date.isoformat(), "hour": f"{hour:02d}", "mode": "forecast",
+            "clock_basis": "page_local_calendar"}
+
+
 class KritsClient:
     """Chromium 공개 페이지 수집 기반. 자원은 첫 호출에서 생성한다.
 
@@ -521,6 +603,68 @@ class KritsClient:
                                          {"searchType": "rt", "roadNo": int(road_number), "sctnTyCode": "EX", "keyword": ""})
             return DataSnapshot(parse_detours(payload, road_number), BASE_URL + _PATHS["detour"],
                                 datetime.now(timezone.utc), {"road_type": "highway", "road_number": road_number, "mode": "current"})
+
+    @_cached_query
+    async def list_reference_files(self, service: ReferenceService) -> DataSnapshot[FileAttachment]:
+        """예측 본선 구간/VDS 시설물/VSL 현황 XLSX를 발견한다. 실시간 API 데이터와 다르다."""
+        if not isinstance(service, str) or service not in REFERENCE_PATHS:
+            raise ValueError("service는 fcTraffic/detectorInfo/vsl이어야 합니다")
+        url = BASE_URL + "/opendata/opendataList?service=" + service
+        async with self._browser.operation() as page:
+            await _visit_page(page, url, "#moveApi")
+            rows = await page.locator('a[href^="/file/opendata/"][href$=".xlsx"]').evaluate_all(
+                "es => es.map(e => ({name:e.textContent.trim(), href:e.getAttribute('href')}))")
+            return DataSnapshot(parse_reference_files(rows, service), url, datetime.now(timezone.utc),
+                                {"service": service, "kind": "reference", "edition": "not_provided"},
+                                completeness_note="공개 참고 XLSX이며 시설물/구간 현황과 실시간 API의 범위·갱신 시각은 같다고 보장하지 않습니다.")
+
+    @_cached_query
+    async def list_forecast_roads(self) -> DataSnapshot[DetourRoad]:
+        """예측 대상 고속도로 노선번호를 조회한다. 현재 우회 노선과 별도 캐시다."""
+        async with self._browser.operation() as page:
+            async with _denial_guard(page, _FORECAST_ROADS) as check:
+                roads = await _forecast_catalog(page)
+                check()
+                return DataSnapshot(roads, BASE_URL + _PATHS["detour"], datetime.now(timezone.utc),
+                                    {"road_type": "highway", "mode": "forecast"})
+
+    @_cached_query
+    async def list_forecast_sections(
+        self, road_number: str, *, forecast_date: date, hour: int, direction: str = "1",
+    ) -> DataSnapshot[ForecastSection]:
+        """날짜·시각·방향별 고속도로 본선/우회 예측 대상과 제공된 집계값을 조회한다."""
+        _forecast_input(road_number, forecast_date, hour, direction)
+        async with self._browser.operation() as page:
+            async with _denial_guard(page, _FORECAST_ROADS), _denial_guard(page, _FORECAST_SECTIONS):
+                items = await _forecast_selection(page, road_number, forecast_date, hour, direction)
+                return DataSnapshot(items, BASE_URL + _PATHS["detour"], datetime.now(timezone.utc),
+                                    _forecast_scope(road_number, forecast_date, hour, direction),
+                                    completeness_note="예측 대상/웹 제공 집계값이며 scope는 관찰한 요청 조건입니다. 응답은 예측 시각을 별도로 확인해 주지 않습니다.")
+
+    @_cached_query
+    async def get_forecast_links(
+        self, road_number: str, section_id: str, detour_id: str, *,
+        forecast_date: date, hour: int, direction: str = "1",
+    ) -> DataSnapshot[ForecastLink]:
+        """선택한 예측 구간의 본선/우회 링크 원문을 조회한다. 미제공 속도를 추정하지 않는다."""
+        _forecast_input(road_number, forecast_date, hour, direction)
+        if any(not isinstance(value, str) or re.fullmatch(r"[0-9]{1,20}", value) is None for value in (section_id, detour_id)):
+            raise ValueError("section_id/detour_id는 예측 구간의 식별자 문자열이어야 합니다")
+        async with self._browser.operation() as page:
+            async with (_denial_guard(page, _FORECAST_ROADS), _denial_guard(page, _FORECAST_SECTIONS),
+                        _denial_guard(page, _FORECAST_LINKS)):
+                sections = await _forecast_selection(page, road_number, forecast_date, hour, direction)
+                if not any(s.section_id == section_id and s.detour_id == detour_id for s in sections):
+                    raise ValueError("조회 조건의 예측 목록에 없는 구간/우회 식별자입니다")
+                payload = await _forecast_query(page, _FORECAST_LINKS, {
+                    "searchType": "fc", "sctnId": section_id, "detuId": detour_id,
+                    "fcDate": forecast_date.strftime("%Y%m%d"), "fcHour": f"{hour:02d}",
+                })
+                scope = _forecast_scope(road_number, forecast_date, hour, direction)
+                scope.update(section_id=section_id, detour_id=detour_id)
+                return DataSnapshot(parse_forecast_links(payload, road_number, section_id), BASE_URL + _PATHS["detour"],
+                                    datetime.now(timezone.utc), scope,
+                                    completeness_note="공개 예측 상세의 MAIN/DETOUR 링크이며 raw_speed의 유효성/예측 정확도를 보장하지 않습니다.")
 
     @_cached_query
     async def list_travel_origins(self) -> DataSnapshot[str]:

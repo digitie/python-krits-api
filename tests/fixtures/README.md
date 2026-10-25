@@ -33,3 +33,14 @@
 `nodelink-partial*.json`은 2024년 조회의 seq201 한 건·원본1첨부다. 내역서 null과 개통 구간만
 담았다는 원문 설명을 보존한다. 원본 ZIP·세션·HTML은 포함하지 않는다.
 
+
+## T011 공개 예측/참고 데이터
+
+2026-10-25 Chromium의 개별 우회 화면에서 type=fc 예측 노선15건과 날짜/시각 지정 공개 웹
+요청을 확인했다. forecast-roads.json은15노선, forecast-sections.json은 고속도로1/방향1의
+9구간 중 앞2건, forecast-links.json은 같은 첫 구간의 MAIN43/DETOUR148링크 중 각 앞2건이다.
+축약한 FeatureCollection의 totalFeatures만2로 조정했고 원문 ID/타입/순서/좌표는 보존했다.
+우회 두 번째 링크의 자체 ROAD_NO=47을 본선1로 바꾸지 않는다.
+집계값이 없고 상세 PASNG_SPED=1인 실제 상태를 유효한 예측값으로 꾸미지 않는다.
+API 키·토큰·hidden input·쿠키·전체 HTML·XLSX 원본은 fixture에 포함하지 않는다.
+참고 XLSX의 실제 원문은 저장소 밖 FileStore에 보관하고 live 검사로 검증한다.
