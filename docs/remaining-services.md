@@ -1,6 +1,6 @@
 # 나머지 공식 서비스와 공개 웹 대응
 
-2026-10-24 Chromium 149 조사 기준이다. 인증 API는 호출하지 않았다.
+2026-10-25 Chromium 149 재조사 기준이다. 인증 API는 호출하지 않았다.
 공식 사양은 비교 기준이며 공개 웹의 ID·시각·범위가 공식 API와 같다는 뜻이 아니다.
 `list_capabilities()`는 아래 판정을 네트워크 없이 반환한다. 사이트의 실시간 상태 검사는 아니다.
 
@@ -9,11 +9,11 @@
 | traffic | `list_roads`, `get_traffic`, 기간 파일 목록 | 선택 도로·방향의 현재 구간. 전국 완전성 미보장 |
 | event | `get_events`, 기간 파일 목록 | 현재 HIGHWAY/NATIONAL. DISASTER 제외 |
 | cctv | `search_cctvs` | 이름 검색 메타데이터. 영상은 제공하지 않음 |
-| fcTraffic | 미지원 | 날짜·시간 지정 예측 UI/응답 미확인. 현재 우회 비교와 다름 |
-| detectorInfo | 미지원 | 검지기·차로별 속도/교통량/점유율 조작과 응답 미확인 |
+| fcTraffic | `list_forecast_roads`, `list_forecast_sections`, `get_forecast_links`, `list_reference_files` | 고속도로 날짜·시각·방향별 예측 대상/상세 원문과 본선 구간 XLSX. 집계 결측·원시 speed 의미·국도 한계 있음 |
+| detectorInfo | `list_reference_files("detectorInfo")` | VDS 시설물 현황 XLSX만 지원. 차로별 실시간 속도/교통량/점유율은 미지원 |
 | vms | `get_vms`, 기간 파일 목록 | 현재 지도 표출 원문. 공식 메시지 순번/생성시각 동등성 미보장 |
 | safeDriving | 미지원 | 우선순위·단계·시종점 링크 메시지 미확인. 취약구간 파일과 다름 |
-| vsl | 미지원 | 표지별 가변/기본 제한속도 미확인. 소통 속도로 대체하지 않음 |
+| vsl | `list_reference_files("vsl")` | 고속도로/국도 VSL 현황 XLSX만 지원. 실시간 가변/기본 제한속도 조회는 미지원 |
 | weakSection | `list_data_files("weakSection")` | 결빙·안개 CSV 원문. 인코딩 명시, CRS 추정 없음 |
 | nodelink | `list_nodelink_releases` | 배포·첨부 발견과 원본 보관. 형상 DB/지도는 소비자 책임 |
 | dangerousCarInfo | 미지원 | 위험물 차량 사고 전용 ID·상태 조회 미확인. 일반 돌발에서 추정하지 않음 |
@@ -57,16 +57,19 @@ scope는 `group=DISASTER,time=current,excluded=HIGHWAY,NATIONAL`, `complete=Fals
 공식 disaster의 날짜 범위·도로 링크/발생 유형 조회와 다르다. 실제 화재구역 1건으로 필드를 확인했다.
 실제 빈 구역은 가능하지만 누락 collection/잘못된 INFO는 정상 빈 결과가 아니다.
 
-## 미지원 판정의 근거와 한계
+## 초기 판정과 재조사
 
 T001에서 공식 12종 사양 페이지를 실제 Chromium으로 읽었다. T009에서는 같은 날 수집한
 traffic/outbreak/cctv/detour/travelTime 화면과 공개 mapOl/markerOl/polylineOl/commonMap 및
 각 화면 JS의 UI·요청을 대조했다. 공개 메뉴의 OpenData 링크는 인증 API 사양으로 연결된다.
-공개 map JS에서는 VMS와 현재 재난구역의 실제 요청을 찾았으나 나머지 5종의 전용 UI/응답은 확인하지 못했다.
-우회 화면은 현재 소요시간/속도이며 날짜·시간 지정 예측 동작이 없다.
+T009에서는 VMS와 현재 재난구역을 검증했고 나머지5종을 당시 확인한 범위에서 미지원으로 판정했다.
+T011은 요청 완료·예측 전용 DOM을 명시적으로 기다려 개별 우회 화면의 fc 분기와 날짜/시각 요청을
+실제로 확인했고, VDS/VSL 참고 XLSX도 발견·전송·읽기 검증했다. 이전의 예측 미지원 판정을 수정한다.
 
 이는 사이트 전체에 해당 데이터가 절대 없다는 주장이 아니다. 확인한 공개 UI에서 검증되지 않아
-이번 버전은 미지원으로 판정한다. [예측 공식 사양](https://www.its.go.kr/opendata/opendataList?service=fcTraffic),
+현재는10종의 부분 지원/파일과2종 미지원이며 실시간 API10종을 동등 구현했다는 뜻이 아니다.
+세부 요청·결측/원시값·정적 파일·조사 한계는 [T011 확장 사양](public-expansion.md)을 따른다.
+[예측 공식 사양](https://www.its.go.kr/opendata/opendataList?service=fcTraffic),
 [VDS](https://www.its.go.kr/opendata/opendataList?service=detectorInfo),
 [주의운전](https://www.its.go.kr/opendata/opendataList?service=safeDriving),
 [VSL](https://www.its.go.kr/opendata/opendataList?service=vsl),

@@ -51,15 +51,18 @@ python -m playwright install chromium
 | 돌발 | `get_events` | 현재 고속도로·국도 |
 | CCTV | `search_cctvs` | 명칭 검색 메타데이터 |
 | 우회/소요시간 | `list_detour_roads`, `get_detours`, `list_travel_origins`, `get_travel_times` | 현재 비교/기점 위젯 |
+| 교통예측 | `list_forecast_roads`, `list_forecast_sections`, `get_forecast_links` | 고속도로 날짜·시각·방향별 예측 대상/상세 원문 |
 | VMS | `get_vms` | 현재 표출 원문 |
 | 재난 | `get_disaster_zones` | 현재 DISASTER 구역 |
 | 공개 파일 | `list_data_files` | 소통/돌발/VMS 기간 ZIP, 취약구간 CSV |
+| 참고 데이터 | `list_reference_files` | 예측 본선 구간·VDS 시설물·고속도로/국도 VSL 현황 XLSX |
 | 노드링크 | `list_nodelink_releases`, `compare_nodelink_catalogs` | 배포/첨부와 같은 범위 관찰 차이 |
 | 원본 관리 | `download_file`, `FileStore` | 청크 전송·해시 버전·manifest·재사용 |
 | 형식/S3 | `inspect_file`, `read_csv`, `read_xlsx`, 선택 `S3Store` | 제한 검사/읽기·원격 PUT/GET 해시 |
 | 진단 | `get_page_snapshot` | 제목·출처·수집 시각 |
 
-예측·VDS·주의운전·VSL·위험물 전용 조회는 공개 웹 계약을 확인하지 못해 미지원이다.
+교통예측은 공개 웹의 부분 지원이다. VDS/VSL은 정적 현황 파일만 지원하며 실시간 검지값·가변
+제한속도는 미지원이다. 주의운전 메시지·위험물 차량 사고 전용 조회도 미지원이다.
 
 ```python
 import asyncio
@@ -150,7 +153,27 @@ CSV는 확인된 `encoding=`을 지정한다. 기존 원본 재요청은 로컬 
 현재 VMS 표출 원문은 `await client.get_vms()`, 현재 재난구역은
 `await client.get_disaster_zones()`로 조회한다. 공식 12종의 지원·미지원과 한계는
 `from krits import list_capabilities` 및 [대응표](docs/remaining-services.md)를 확인한다.
-예측·VDS·주의운전·VSL·위험물 전용 기능은 공개 웹 계약을 확인하지 못해 미지원이다.
+교통예측과 VDS/VSL 참고 데이터의 추가 계약은 [공개 기능 확장](docs/public-expansion.md)에 있다.
+
+```python
+from datetime import date, timedelta
+
+async def forecast_and_references(client):
+    roads = await client.list_forecast_roads()
+    day = date.today() + timedelta(days=1)
+    sections = await client.list_forecast_sections(roads.items[0].road_number,
+        forecast_date=day, hour=12, direction="1")
+    for section in sections.items:
+        print(section.name, section.main_speed_kmh)  # 미제공 집계값은 None
+    references = await client.list_reference_files("detectorInfo")
+    for attachment in references.items:
+        print(attachment.name, attachment.download_url)
+```
+
+예측 날짜/시각은 페이지의 로컬 달력 기준이며 현재일~6일 뒤 범위를 확인한다.
+상세 `ForecastLink.raw_speed`는 응답 원시값으로, 유효한 예측 속도라고 단정하지 않는다.
+참고 XLSX는 기존 `download_file`/`FileStore`/`inspect_file`/`read_xlsx`로 보관·검사한다.
+시설물 현황의 게시 기준일과 실시간 API의 갱신 시각이 같다고 설명하지 않는다.
 
 표준노드링크는 `await client.list_nodelink_releases(start_date=date(...), end_date=date(...))`로
 1년 이내 배포와 원본 ZIP·내역서 첨부를 발견한다. `compare_nodelink_catalogs(before, after)`로

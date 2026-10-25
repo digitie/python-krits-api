@@ -9,7 +9,8 @@ from typing import Any, cast
 from urllib.parse import urlsplit
 
 from .exceptions import KritsSchemaError
-from .models import CatalogChanges, Cctv, DataSnapshot, Detour, DetourRoad, DisasterZone, FileAttachment, NodeLinkRelease, Road, RoadEvent, RoadType, TrafficLink, TrafficSection, TravelTime, Vms
+from ._references import REFERENCE_PATHS
+from .models import CatalogChanges, Cctv, DataSnapshot, Detour, DetourRoad, DisasterZone, FileAttachment, ForecastLink, ForecastSection, NodeLinkRelease, ReferenceService, Road, RoadEvent, RoadType, TrafficLink, TrafficSection, TravelTime, Vms
 
 
 def decode_json(text: str) -> object:
@@ -294,6 +295,97 @@ def parse_detours(value: object, road_number: str) -> tuple[Detour, ...]:
                                  _number(item.get("DETOUR_PASNG_SPED"), "DETOUR_PASNG_SPED"),
                                  _number(item.get("MAIN_PASNG_TIME"), "MAIN_PASNG_TIME"),
                                  _number(item.get("DETOUR_PASNG_TIME"), "DETOUR_PASNG_TIME"), dict(item)))
+    return tuple(result)
+
+
+def parse_reference_files(value: object, service: ReferenceService) -> tuple[FileAttachment, ...]:
+    """실제 DOM에서 확인한 XLSX만 반환한다. 참고 데이터 누락을 정상 빈 목록으로 숨기지 않는다."""
+    expected = REFERENCE_PATHS[service]
+    result: dict[str, FileAttachment] = {}
+    for row in _list(value, "참고 데이터 DOM"):
+        info = _object(row, "참고 첨부")
+        path = _text(info.get("href"), "href")
+        name = _text(info.get("name"), "name")
+        if path not in expected or not name.lower().endswith(".xlsx"):
+            raise KritsSchemaError("참고 데이터의 경로 또는 표시 파일 형식이 바뀌었습니다")
+        if path in result and result[path].name != name:
+            raise KritsSchemaError("같은 참고 첨부의 표시 파일명이 일치하지 않습니다")
+        result[path] = FileAttachment(service, None, None, name, "https://www.its.go.kr" + path,
+                                      None, {"kind": "reference"})
+    if set(result) != set(expected):
+        raise KritsSchemaError("공개 참고 데이터 첨부가 누락됐습니다")
+    return tuple(result[path] for path in expected)
+
+
+def parse_forecast_roads(value: object) -> tuple[DetourRoad, ...]:
+    """예측 전용 노선 응답을 검사한다. 실시간 노선 목록과 같다고 추정하지 않는다."""
+    rows = _list(_object(_data(value).get("SECTIONS"), "SECTIONS").get("LIST"), "LIST")
+    result = []
+    seen = set()
+    for row in rows:
+        info = _object(row, "예측 노선")
+        number = _text(info.get("ROAD_NO"), "ROAD_NO")
+        if re.fullmatch(r"[0-9]{1,4}", number) is None or number in seen or info.get("SCTN_TY_CODE") != "EX":
+            raise KritsSchemaError("예측 노선번호/도로 종류가 잘못됐거나 중복됐습니다")
+        seen.add(number)
+        result.append(DetourRoad(number, _text(info.get("ROAD_NM"), "ROAD_NM")))
+    return tuple(result)
+
+
+def parse_forecast_sections(value: object, road_number: str, direction: str) -> tuple[ForecastSection, ...]:
+    """예측 구간 목록. 사이트가 생략하는 집계값은 결측이며 0이나 링크 원시값으로 채우지 않는다."""
+    rows = _list(_object(_data(value).get("SECTIONS"), "SECTIONS").get("LIST"), "LIST")
+    result = []
+    seen = set()
+    for row in rows:
+        info = _object(row, "예측 구간")
+        section_id = _text(info.get("MLN_SCTN_ID"), "MLN_SCTN_ID")
+        detour_id = _text(info.get("DETU_ID"), "DETU_ID")
+        if (info.get("ROAD_NO") != road_number or info.get("DRC_CODE") != direction
+                or info.get("SCTN_TY_CODE") != "EX" or (section_id, detour_id) in seen):
+            raise KritsSchemaError("예측 구간 도로/방향이 조회 조건과 다르거나 구간이 중복됐습니다")
+        seen.add((section_id, detour_id))
+        if info.get("PREDICT_AT") not in ("Y", "N"):
+            raise KritsSchemaError("예측 대상 여부가 Y/N이 아닙니다")
+        aggregates = [None if info.get(key) is None else _number(info[key], key) for key in
+                      ("MAIN_PASNG_SPED", "DETOUR_PASNG_SPED", "MAIN_PASNG_TIME", "DETOUR_PASNG_TIME")]
+        result.append(ForecastSection(section_id, detour_id, road_number, direction,
+                                      _text(info.get("SCTN_NM"), "SCTN_NM"), info["PREDICT_AT"] == "Y",
+                                      _count(info.get("MAIN_RANK"), "MAIN_RANK"),
+                                      _count(info.get("DETOUR_RANK"), "DETOUR_RANK"),
+                                      aggregates[0], aggregates[1], aggregates[2], aggregates[3], dict(info)))
+    return tuple(result)
+
+
+def parse_forecast_links(value: object, road_number: str, section_id: str) -> tuple[ForecastLink, ...]:
+    """MAIN/DETOUR 상세를 순서 그대로 보존한다. PASNG_SPED=1의 의미는 추정하지 않는다."""
+    payload = _object(value, "예측 상세")
+    result = []
+    for route in ("MAIN", "DETOUR"):
+        seen = set()
+        for row in _features(payload.get(route), route):
+            feature = _object(row, "예측 Feature")
+            props = _object(feature.get("properties"), "properties")
+            info = _object(props.get("INFO"), "INFO")
+            identifier = _text(info.get("LINK_ID"), "LINK_ID")
+            sequence = _count(info.get("LINK_SEQ"), "LINK_SEQ")
+            if (feature.get("type") != "Feature" or props.get("type") != route or feature.get("id") != identifier
+                    or info.get("MLN_SCTN_ID") != section_id
+                    or sequence == 0 or sequence in seen):
+                raise KritsSchemaError("예측 링크 종류/ID/구간/도로/순번이 일치하지 않거나 중복됐습니다")
+            seen.add(sequence)
+            _text(info.get("ROAD_NO"), "ROAD_NO")
+            if "PASNG_SPED" not in info:
+                raise KritsSchemaError("예측 상세 PASNG_SPED 필드가 없습니다")
+            geometry = _object(feature.get("geometry"), "geometry")
+            if geometry.get("type") != "LineString":
+                raise KritsSchemaError("예측 링크 geometry가 LineString이 아닙니다")
+            # 공개 POLYLINE의 GeoJSON 좌표 검증만 수행하며 별도 CRS 변환은 하지 않는다.
+            if not _path(geometry.get("coordinates")):
+                raise KritsSchemaError("예측 링크 좌표가 없습니다")
+            speed = None if info["PASNG_SPED"] is None else _number(info["PASNG_SPED"], "PASNG_SPED")
+            result.append(ForecastLink(identifier, section_id, route,
+                                       sequence, _number(info.get("LENGTH"), "LENGTH"), speed, dict(info), dict(geometry)))
     return tuple(result)
 
 

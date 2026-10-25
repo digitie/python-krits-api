@@ -1,0 +1,90 @@
+{
+  "header": {
+    "result": "정상 처리되었습니다.",
+    "state": "OK"
+  },
+  "body": {
+    "dataLen": 1,
+    "data": {
+      "SECTIONS": {
+        "LIST": [
+          {
+            "ROAD_NO": "1",
+            "SCTN_TY_CODE": "EX",
+            "ROAD_NM": "경부고속도로"
+          },
+          {
+            "ROAD_NO": "10",
+            "SCTN_TY_CODE": "EX",
+            "ROAD_NM": "남해고속도로"
+          },
+          {
+            "ROAD_NO": "15",
+            "SCTN_TY_CODE": "EX",
+            "ROAD_NM": "서해안고속도로"
+          },
+          {
+            "ROAD_NO": "25",
+            "SCTN_TY_CODE": "EX",
+            "ROAD_NM": "호남고속도로"
+          },
+          {
+            "ROAD_NO": "35",
+            "SCTN_TY_CODE": "EX",
+            "ROAD_NM": "중부고속도로"
+          },
+          {
+            "ROAD_NO": "40",
+            "SCTN_TY_CODE": "EX",
+            "ROAD_NM": "평택제천고속도로"
+          },
+          {
+            "ROAD_NO": "45",
+            "SCTN_TY_CODE": "EX",
+            "ROAD_NM": "중부내륙고속도로"
+          },
+          {
+            "ROAD_NO": "50",
+            "SCTN_TY_CODE": "EX",
+            "ROAD_NM": "영동고속도로"
+          },
+          {
+            "ROAD_NO": "55",
+            "SCTN_TY_CODE": "EX",
+            "ROAD_NM": "중앙고속도로"
+          },
+          {
+            "ROAD_NO": "60",
+            "SCTN_TY_CODE": "EX",
+            "ROAD_NM": "서울양양고속도로"
+          },
+          {
+            "ROAD_NO": "65",
+            "SCTN_TY_CODE": "EX",
+            "ROAD_NM": "동해고속도로"
+          },
+          {
+            "ROAD_NO": "100",
+            "SCTN_TY_CODE": "EX",
+            "ROAD_NM": "서울외곽순환고속도로"
+          },
+          {
+            "ROAD_NO": "104",
+            "SCTN_TY_CODE": "EX",
+            "ROAD_NM": "남해제2지선"
+          },
+          {
+            "ROAD_NO": "120",
+            "SCTN_TY_CODE": "EX",
+            "ROAD_NM": "경인고속도로"
+          },
+          {
+            "ROAD_NO": "551",
+            "SCTN_TY_CODE": "EX",
+            "ROAD_NM": "중앙고속도로지선"
+          }
+        ]
+      }
+    }
+  }
+}

@@ -7,6 +7,7 @@ from typing import Any, Generic, Literal, TypeVar
 
 RoadType = Literal["highway", "national"]
 OpenDataService = Literal["traffic", "event", "vms", "weakSection"]
+ReferenceService = Literal["fcTraffic", "detectorInfo", "vsl"]
 T = TypeVar("T")
 
 
@@ -154,6 +155,39 @@ class TravelTime:
     destination: str
     minutes: float
     raw: dict[str, Any] = field(repr=False)
+
+
+@dataclass(frozen=True, slots=True)
+class ForecastSection:
+    """날짜/시각/방향을 지정한 고속도로 예측 대상 구간. 미제공 집계값은 None이다."""
+
+    section_id: str
+    detour_id: str
+    road_number: str
+    direction: str
+    name: str
+    predictable: bool
+    main_rank: int
+    detour_rank: int
+    main_speed_kmh: float | None
+    detour_speed_kmh: float | None
+    main_time_seconds: float | None
+    detour_time_seconds: float | None
+    raw: dict[str, Any] = field(repr=False)
+
+
+@dataclass(frozen=True, slots=True)
+class ForecastLink:
+    """예측 상세 분기의 링크 원문. raw_speed를 유효한 예측 속도로 단정하지 않는다."""
+
+    link_id: str
+    section_id: str
+    route: Literal["MAIN", "DETOUR"]
+    sequence: int
+    length_m: float
+    raw_speed: float | None
+    raw_info: dict[str, Any] = field(repr=False)
+    geometry: dict[str, Any] = field(repr=False)
 
 
 @dataclass(frozen=True, slots=True)

@@ -15,6 +15,7 @@ from playwright.async_api import CDPSession, Error as PlaywrightError
 
 from ._browser import BrowserSession, _intercept_request
 from ._file_io import run_file_io
+from ._references import REFERENCE_PATHS
 from .exceptions import KritsAccessError, KritsIntegrityError, KritsNetworkError, KritsRateLimitError
 from .models import FileAttachment, StoredFile
 from .storage import CHUNK_SIZE, FileStore, _metadata
@@ -36,7 +37,7 @@ def validate_attachment(attachment: FileAttachment, max_bytes: int) -> None:
             raise ValueError("첨부 문자열 필드가 잘못됐습니다")
     url = urlsplit(attachment.download_url)
     if (url.scheme != "https" or url.netloc != "www.its.go.kr" or url.query or url.fragment
-            or _PATH.fullmatch(url.path) is None):
+            or (_PATH.fullmatch(url.path) is None and url.path not in {p for paths in REFERENCE_PATHS.values() for p in paths})):
         raise ValueError("공개 ITS 첨부 URL만 다운로드할 수 있습니다")
     for identifier in (attachment.file_id, attachment.attachment_id):
         if identifier is not None and (not isinstance(identifier, str) or not identifier or len(identifier) > 4096):
