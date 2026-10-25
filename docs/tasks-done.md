@@ -14,6 +14,7 @@
 | T008 | ZIP/CSV/XLSX 경계·CRC·원문/검사 보고서·명시적 S3 GET 해시 | [#10](https://github.com/digitie/python-krits-api/pull/10) | [독립 리뷰2건·471 오프라인·58 live·설치본·CI](validation/t008.md) |
 | T009 | 현재 VMS·DISASTER 재난구역·공식12종 부분지원/미지원 표 | [#11](https://github.com/digitie/python-krits-api/pull/11) | [독립 재리뷰2건·493 오프라인·전체63/최종영향9 live·CI](validation/t009.md) |
 | T010 | 설치본 전체 기능·전체 ZIP 원문/CRC/prj/재사용·sdist·초기 버전 문서 | [#12](https://github.com/digitie/python-krits-api/pull/12) | [독립 재리뷰2건·498 오프라인·전체64/최종ZIP1 live·설치본·CI](validation/t010.md) |
+| T011 | 미지원5종 재조사·공개 예측 노선/구간/상세·예측/VDS/VSL 참고 XLSX4개 | [#14](https://github.com/digitie/python-krits-api/pull/14) | [독립 재리뷰2건·598 오프라인·전체78 live/skip0·격리설치본·sdist·CI](validation/t011.md) |
 
 PR 머지를 확인한 뒤 다음 task를 시작한다.
 
@@ -25,4 +26,6 @@ T006 PR #7은 최종 증빙 head CI6개 job 통과 후 `085c329`로 머지했다
 
 T010 PR #12는 증빙 head `bfad2e5`의 CI6개job 통과 후 `1d430ab`로 머지했다.
 초기 계획과 추가 T006A가 완료됐다. T010 시점의 미지원5종·외부S3계정·PyPI/운영배포 범위는 각 증빙에 명시했다.
-사용자 후속 요청 T011의 공개 예측/참고 데이터 확장은 현재 작업 목록에서 별도 관리한다.
+T011 PR #14는 증빙 head `a3f2d6c`의 CI40179595983(6개job) 성공 후 `cdbb0ba`로 머지했다.
+T001–T011/T006A가 완료됐다. VDS/VSL 실시간 관측·주의운전/위험물 전용 조회는
+공개 화면에서 검증하지 못한 기능이며 미구현 task를 완료했다고 주장하지 않는다.
